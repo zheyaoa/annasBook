@@ -1,0 +1,8 @@
+node_modules/
+dist/
+downloads/
+logs/
+config.json
+cookies.json
+.lock
+*.log

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:annas-archive.li)",
+      "WebFetch(domain:annas-archive.gl)",
+      "Bash(npx xlsx-cli:*)",
+      "WebSearch",
+      "WebFetch(domain:software.annas-archive.gl)",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(git init:*)"
+    ]
+  }
+}
