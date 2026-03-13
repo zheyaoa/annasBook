@@ -91,6 +91,46 @@ export class Searcher {
     }
   }
 
+  async searchByQuery(
+    query: string,
+    format?: 'pdf' | 'epub'
+  ): Promise<SearchResult[]> {
+    if (!query || !query.trim()) {
+      logger.warn('Empty search query provided');
+      return [];
+    }
+
+    const encodedQuery = encodeURIComponent(query.trim());
+
+    // Build format parameter
+    let extParam: string;
+    if (format === 'pdf') {
+      extParam = 'ext=pdf';
+    } else if (format === 'epub') {
+      extParam = 'ext=epub';
+    } else {
+      extParam = 'ext=pdf&ext=epub';
+    }
+
+    const url = `${this.config.baseUrl}/search?index=&page=1&sort=&${extParam}&display=&q=${encodedQuery}`;
+
+    logger.info(`Searching for: ${query}`);
+
+    try {
+      const { status, body } = await this.httpClient.get(url);
+
+      // Check for CAPTCHA
+      if (this.httpClient.isCaptchaResponse(body, status)) {
+        return this.handleCaptcha(url);
+      }
+
+      return this.parseSearchResults(body, query);
+    } catch (error) {
+      logger.error(`Search failed for "${query}": ${(error as Error).message}`);
+      return [];
+    }
+  }
+
   private handleCaptcha(url: string): SearchResult[] {
     logger.warn('CAPTCHA detected!');
     console.log('\n' + '='.repeat(60));
@@ -119,6 +159,7 @@ export class Searcher {
         if (!md5 || md5.length < 20) return; // Invalid MD5
 
         const title = $link.text().trim();
+        if (!title) return; // Skip results with empty titles
 
         // Find author link (spec: Links containing icon-[mdi--user-edit])
         const $parent = $link.closest('tr, div');
@@ -154,9 +195,9 @@ export class Searcher {
   selectBestResult(results: SearchResult[], searchTitle: string): SearchResult | null {
     if (results.length === 0) return null;
 
-    // Filter by format priority: PDF > EPUB
-    const pdfResults = results.filter(r => r.format === 'pdf');
-    const epubResults = results.filter(r => r.format === 'epub');
+    // Filter by format priority: PDF > EPUB, and exclude empty titles
+    const pdfResults = results.filter(r => r.format === 'pdf' && r.title);
+    const epubResults = results.filter(r => r.format === 'epub' && r.title);
 
     const candidates = pdfResults.length > 0 ? pdfResults : epubResults;
 
@@ -176,7 +217,36 @@ export class Searcher {
       return exactMatches[0];
     }
 
-    // No exact match, use first result (relevance sort)
-    return candidates[0];
+    // No exact match - check for title similarity
+    // Return null if no candidate has reasonable title similarity
+    const similarityThreshold = 0.3; // At least 30% word overlap
+    const searchWords = new Set(normalizedSearch.split(/\s+/).filter(w => w.length > 2));
+
+    const candidatesWithSimilarity = candidates.map(r => {
+      const normalizedResult = r.title.toLowerCase().replace(PUNCTUATION_REGEX, '');
+      const resultWords = new Set(normalizedResult.split(/\s+/).filter(w => w.length > 2));
+
+      // Calculate Jaccard similarity
+      const intersection = [...searchWords].filter(w => resultWords.has(w)).length;
+      const union = new Set([...searchWords, ...resultWords]).size;
+      const similarity = union > 0 ? intersection / union : 0;
+
+      return { result: r, similarity };
+    });
+
+    // Filter candidates with sufficient similarity
+    const similarCandidates = candidatesWithSimilarity
+      .filter(c => c.similarity >= similarityThreshold)
+      .sort((a, b) => b.similarity - a.similarity);
+
+    if (similarCandidates.length === 0) {
+      logger.warn(`No similar results found for "${searchTitle}". Best candidate has similarity ${Math.max(...candidatesWithSimilarity.map(c => c.similarity)).toFixed(2)}`);
+      return null;
+    }
+
+    // Return the most similar candidate
+    const best = similarCandidates[0];
+    logger.info(`Selected result with similarity ${(best.similarity * 100).toFixed(0)}%: "${best.result.title}"`);
+    return best.result;
   }
 }
