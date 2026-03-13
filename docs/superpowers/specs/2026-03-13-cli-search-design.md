@@ -91,9 +91,24 @@ Entry point for search mode:
 - Validate at least one search term provided
 - Load config with `skipExcelCheck: true`
 - Build search query from flags
-- Call `Searcher.search()` with constructed query
+- Call `Searcher.searchByQuery()` with query string and format filter
 - Format results and display to console
 - Exit with appropriate code (0 = success, 1 = no results/error)
+
+### Modified File: `src/searcher.ts`
+
+Add new method `searchByQuery()`:
+```typescript
+async searchByQuery(
+  query: string,
+  format?: 'pdf' | 'epub'
+): Promise<SearchResult[]>
+```
+
+- `query`: Direct search string (can include title, author, or both)
+- `format`: Optional format filter; if omitted, searches both PDF and EPUB
+
+This method is separate from `search(book: BookInfo)` to keep the existing Excel batch mode interface intact. Both methods share `parseSearchResults()` for HTML parsing.
 
 ### Modified File: `package.json`
 
@@ -111,7 +126,6 @@ Add new script:
 ### Reused Components
 
 No changes required to:
-- `Searcher` class - existing `search()` method works for this use case
 - `HttpClient` class - handles HTTP requests and CAPTCHA detection
 - `Config` loading - already supports `skipExcelCheck` option
 - `types.ts` - `SearchResult` interface already has all needed fields
@@ -121,21 +135,29 @@ No changes required to:
 | Error | Behavior |
 |-------|----------|
 | No search terms | Print usage message, exit 1 |
+| Invalid `--format` value | Print error "Invalid format. Use 'pdf' or 'epub'", exit 1 |
+| Invalid `--lang` value | Print error "Invalid lang. Use 'en' or 'zh'", exit 1 |
 | CAPTCHA detected | Print URL for manual solve, exit 1 |
 | No results found | Print "No results found", exit 0 |
 | Network error | Print error message, exit 1 |
 
 ## Search Query Construction
 
-The `Searcher` class builds the Anna's Archive URL:
+The CLI script builds the query string:
+- Combine `--title` and `--author` into a single search query
+- Example: `--title "1984" --author "Orwell"` → query = `"1984 Orwell"`
+
+The `Searcher.searchByQuery()` method builds the Anna's Archive URL:
 ```
 {baseUrl}/search?index=&page=1&sort=&ext={format}&display=&q={query}
 ```
 
-Query string construction:
-- If `--title` provided: include title in query
-- If `--author` provided: append author to query (e.g., "title author")
-- If `--format` specified: set `ext` param; otherwise include both `ext=pdf&ext=epub`
+Format parameter:
+- If `--format pdf`: URL includes only `ext=pdf`
+- If `--format epub`: URL includes only `ext=epub`
+- If no format specified: URL includes `ext=pdf&ext=epub` (both)
+
+**Note:** The `--lang` flag is not used in the search query. It's reserved for future use or UI purposes. Anna's Archive returns results based on the query string alone.
 
 ## Limitations
 
