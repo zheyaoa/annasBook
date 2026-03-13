@@ -78,7 +78,13 @@ xyz789qwe456rty...
 
 ## Architecture
 
-### New File: `src/cli-search.ts`
+### New Directory: `scripts/`
+
+Create a `scripts/` directory for CLI entry points, separate from core library code in `src/`.
+
+**Note:** Scripts in `scripts/` are run directly via `tsx` (not compiled via `tsc`). The `tsconfig.json` has `rootDir: "./src"`, so `scripts/` is intentionally outside the build output.
+
+### New File: `scripts/cli-search.ts`
 
 Entry point for search mode:
 - Parse CLI arguments (`--title`, `--author`, `--format`, `--lang`)
@@ -96,7 +102,7 @@ Add new script:
 {
   "scripts": {
     "start": "tsx src/index.ts",
-    "search": "tsx src/cli-search.ts",
+    "search": "tsx scripts/cli-search.ts",
     "build": "tsc"
   }
 }
