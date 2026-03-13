@@ -11,11 +11,12 @@ import { BookInfo, SearchResult } from './types.js';
 interface CliArgs {
   title: string;
   author?: string;
+  lang: 'en' | 'zh';
 }
 
 function parseCliArgs(): CliArgs | null {
   const args = process.argv.slice(2);
-  const result: CliArgs = { title: '' };
+  const result: CliArgs = { title: '', lang: 'en' };
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--title' && args[i + 1]) {
@@ -23,6 +24,12 @@ function parseCliArgs(): CliArgs | null {
       i++;
     } else if (args[i] === '--author' && args[i + 1]) {
       result.author = args[i + 1];
+      i++;
+    } else if (args[i] === '--lang' && args[i + 1]) {
+      const lang = args[i + 1].toLowerCase();
+      if (lang === 'en' || lang === 'zh') {
+        result.lang = lang;
+      }
       i++;
     }
   }
@@ -85,11 +92,11 @@ async function runCliMode(cliArgs: CliArgs): Promise<void> {
   // Build BookInfo from CLI args
   const book: BookInfo = {
     rowIndex: 0,
-    language: 'en',
-    chineseTitle: '',
-    englishTitle: cliArgs.title,
-    chineseAuthor: '',
-    englishAuthor: cliArgs.author || '',
+    language: cliArgs.lang,
+    chineseTitle: cliArgs.lang === 'zh' ? cliArgs.title : '',
+    englishTitle: cliArgs.lang === 'en' ? cliArgs.title : '',
+    chineseAuthor: cliArgs.lang === 'zh' ? (cliArgs.author || '') : '',
+    englishAuthor: cliArgs.lang === 'en' ? (cliArgs.author || '') : '',
     confidence: '',
     downloadStatus: '',
     bookLink: '',
