@@ -1,19 +1,46 @@
 import fs from 'fs';
-import { Config, CookieData } from './types.js';
+import axios, { AxiosInstance } from 'axios';
+import { Config } from './types.js';
 import { logger } from './logger.js';
 
 export class HttpClient {
   private config: Config;
   private cookies: string;
+  private axiosInstance: AxiosInstance;
 
   constructor(config: Config) {
     this.config = config;
     this.cookies = this.loadCookies();
+    this.axiosInstance = this.createAxiosInstance();
+  }
+
+  private createAxiosInstance(): AxiosInstance {
+    const instance = axios.create({
+      timeout: this.config.requestTimeoutMs,
+      headers: this.getHeaders(),
+    });
+
+    // Configure proxy if specified
+    if (this.config.proxy) {
+      try {
+        const proxyUrl = new URL(this.config.proxy);
+        instance.defaults.proxy = {
+          host: proxyUrl.hostname,
+          port: parseInt(proxyUrl.port, 10) || (proxyUrl.protocol === 'https:' ? 443 : 80),
+          protocol: proxyUrl.protocol.replace(':', ''),
+        };
+      } catch (error) {
+        logger.warn(`Invalid proxy URL: ${this.config.proxy}`);
+      }
+    }
+
+    return instance;
   }
 
   // Method to reload cookies (e.g., after user solves CAPTCHA)
   reloadCookies(): void {
     this.cookies = this.loadCookies();
+    this.axiosInstance.defaults.headers = this.getHeaders() as unknown as typeof this.axiosInstance.defaults.headers;
     logger.info('Cookies reloaded from cookies.json');
   }
 
@@ -69,52 +96,44 @@ export class HttpClient {
   async get(url: string, timeoutMs?: number): Promise<{ status: number; body: string }> {
     const timeout = timeoutMs || this.config.requestTimeoutMs;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
     try {
-      const response = await fetch(url, {
-        method: 'GET',
+      const response = await this.axiosInstance.get(url, {
+        timeout,
         headers: this.getHeaders(),
-        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
-      const body = await response.text();
-      return { status: response.status, body };
+      return { status: response.status, body: response.data };
     } catch (error) {
-      clearTimeout(timeoutId);
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          return { status: error.response.status, body: error.response.data };
+        }
+        throw new Error(`Network error: ${error.message}`);
+      }
       throw error;
     }
   }
 
-  async download(url: string, destPath: string): Promise<void> {
+  async download(url: string, destPath: string): Promise<string> {
     const timeout = this.config.downloadTimeoutMs;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
     try {
-      const response = await fetch(url, {
-        method: 'GET',
+      const response = await this.axiosInstance.get(url, {
+        responseType: 'arraybuffer',
+        timeout,
         headers: this.getHeaders(),
-        signal: controller.signal,
+        maxRedirects: 5,
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (response.status !== 200) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const contentLength = response.headers.get('content-length');
+      const contentLength = response.headers['content-length'];
       const expectedSize = contentLength ? parseInt(contentLength, 10) : 0;
 
-      const buffer = await response.arrayBuffer();
       const tempPath = `${destPath}.tmp`;
-
-      fs.writeFileSync(tempPath, Buffer.from(buffer));
+      fs.writeFileSync(tempPath, response.data);
 
       // Verify size
       const actualSize = fs.statSync(tempPath).size;
@@ -125,12 +144,17 @@ export class HttpClient {
 
       // Rename to final path
       fs.renameSync(tempPath, destPath);
+
+      // Return final URL (after redirects) for format detection
+      return response.request?.res?.responseUrl || url;
     } catch (error) {
-      clearTimeout(timeoutId);
       // Cleanup temp file
       const tempPath = `${destPath}.tmp`;
       if (fs.existsSync(tempPath)) {
         fs.unlinkSync(tempPath);
+      }
+      if (axios.isAxiosError(error)) {
+        throw new Error(`Download failed: ${error.message}`);
       }
       throw error;
     }

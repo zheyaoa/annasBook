@@ -72,16 +72,21 @@ export class Downloader {
 
       // Download file directly (endpoint redirects to actual download URL)
       logger.info(`Downloading: ${filename}`);
-      await this.httpClient.download(url, destPath);
+      const finalUrl = await this.httpClient.download(url, destPath);
 
-      // Verify file size
-      const actualSize = fs.statSync(destPath).size;
-      if (result.sizeBytes > 0 && Math.abs(actualSize - result.sizeBytes) > 1024) {
-        fs.unlinkSync(destPath);
-        return { success: false, error: `Size mismatch: expected ~${result.sizeBytes}, got ${actualSize}` };
+      // Detect actual format from download URL
+      const actualFormat = this.detectFormatFromUrl(finalUrl) || result.format;
+      if (actualFormat !== result.format) {
+        const newPath = destPath.replace(/\.[^.]+$/, `.${actualFormat}`);
+        if (!fs.existsSync(newPath)) {
+          fs.renameSync(destPath, newPath);
+          logger.info(`Format corrected: ${result.format} -> ${actualFormat}`);
+        }
+        return { success: true, filePath: fs.existsSync(newPath) ? newPath : destPath };
       }
 
       this.consecutiveFailures = 0;
+      const actualSize = fs.statSync(destPath).size;
       logger.info(`Downloaded: ${filename} (${actualSize} bytes)`);
 
       return { success: true, filePath: destPath };
@@ -129,5 +134,14 @@ export class Downloader {
   extractMd5FromUrl(url: string): string | null {
     const match = url.match(/\/md5\/([a-fA-F0-9]+)/);
     return match ? match[1] : null;
+  }
+
+  private detectFormatFromUrl(url: string): 'pdf' | 'epub' | null {
+    const match = url.match(/\.([a-z]+)(?:\?|$)/i);
+    const ext = match ? match[1].toLowerCase() : null;
+    if (ext === 'pdf' || ext === 'epub') {
+      return ext;
+    }
+    return null;
   }
 }
