@@ -1,7 +1,6 @@
 import { loadConfig, validateConfig } from '../src/config.js';
 import { HttpClient } from '../src/http-client.js';
 import { Searcher } from '../src/searcher.js';
-import { logger } from '../src/logger.js';
 import { SearchResult } from '../src/types.js';
 
 interface SearchArgs {
@@ -126,7 +125,7 @@ async function main(): Promise<void> {
     formatResults(limitedResults);
 
     // Exit with appropriate code
-    process.exit(results.length > 0 ? 0 : 0); // Exit 0 even for no results
+    process.exit(0);
   } catch (error) {
     const errorMsg = (error as Error).message;
 
