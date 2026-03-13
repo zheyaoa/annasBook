@@ -11,9 +11,10 @@ const DEFAULT_CONFIG: Config = {
   requestTimeoutMs: 30000,
   downloadTimeoutMs: 300000,
   maxRetries: 3,
+  proxy: process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '',
 };
 
-export function loadConfig(configPath: string = './config.json'): Config {
+export function loadConfig(configPath: string = './config.json', options?: { skipExcelCheck?: boolean }): Config {
   if (!fs.existsSync(configPath)) {
     console.error(`Error: Config file not found at ${configPath}`);
     console.error('Please copy config.example.json to config.json and fill in your API key.');
@@ -33,7 +34,7 @@ export function loadConfig(configPath: string = './config.json'): Config {
       console.error('Error: baseUrl is required in config.json');
       process.exit(1);
     }
-    if (!config.excelFile) {
+    if (!config.excelFile && !options?.skipExcelCheck) {
       console.error('Error: excelFile is required in config.json');
       process.exit(1);
     }
@@ -45,11 +46,13 @@ export function loadConfig(configPath: string = './config.json'): Config {
   }
 }
 
-export function validateConfig(config: Config): void {
-  // Check Excel file exists
-  if (!fs.existsSync(config.excelFile)) {
-    console.error(`Error: Excel file not found at ${config.excelFile}`);
-    process.exit(1);
+export function validateConfig(config: Config, options?: { skipExcelCheck?: boolean }): void {
+  // Check Excel file exists (skip in CLI mode)
+  if (!options?.skipExcelCheck && config.excelFile) {
+    if (!fs.existsSync(config.excelFile)) {
+      console.error(`Error: Excel file not found at ${config.excelFile}`);
+      process.exit(1);
+    }
   }
 
   // Create download directory if not exists
