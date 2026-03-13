@@ -55,33 +55,11 @@ export class Downloader {
   }
 
   async download(book: BookInfo, result: SearchResult): Promise<DownloadResult> {
-    const url = `${this.config.baseUrl}/fast_download.json?md5=${result.md5}&key=${this.config.apiKey}`;
+    // New API endpoint: fast_download/{md5}/0/0 (requires login cookies)
+    const url = `${this.config.baseUrl}/fast_download/${result.md5}/0/0`;
 
     try {
-      // Get download URL from API
-      const { status, body } = await this.httpClient.get(url);
-
-      if (status !== 200) {
-        return this.handleApiError(body, result.md5);
-      }
-
-      let data: { url?: string; download_url?: string; error?: string };
-      try {
-        data = JSON.parse(body);
-      } catch {
-        return { success: false, error: 'Invalid API response' };
-      }
-
-      if (data.error) {
-        return this.handleApiError(JSON.stringify(data), result.md5);
-      }
-
-      const downloadUrl = data.url || data.download_url;
-      if (!downloadUrl) {
-        return { success: false, error: 'No download URL in response' };
-      }
-
-      // Generate filename
+      // Generate filename first
       const filename = this.generateFilename(book, result.format);
       const destPath = path.join(this.config.downloadDir, filename);
 
@@ -92,9 +70,9 @@ export class Downloader {
         return { success: true, filePath: destPath };
       }
 
-      // Download file
+      // Download file directly (endpoint redirects to actual download URL)
       logger.info(`Downloading: ${filename}`);
-      await this.httpClient.download(downloadUrl, destPath);
+      await this.httpClient.download(url, destPath);
 
       // Verify file size
       const actualSize = fs.statSync(destPath).size;
