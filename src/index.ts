@@ -136,6 +136,11 @@ async function main(): Promise<void> {
         continue;
       }
 
+      // Fetch book details (year, publisher) from detail page
+      const details = await searcher.fetchBookDetails(searchResult.md5);
+      searchResult.year = details.year;
+      searchResult.publisher = details.publisher;
+
       // Download with retry
       const result = await withRetry(
         () => downloader.download(book, searchResult!),

@@ -292,4 +292,62 @@ export class Searcher {
     logger.info(`Selected: "${best.result.title}" (score: ${best.score})`);
     return best.result;
   }
+
+  // Fetch book details from detail page to get year and publisher
+  async fetchBookDetails(md5: string): Promise<{ year: string; publisher: string }> {
+    const url = `${this.config.baseUrl}/md5/${md5}`;
+    try {
+      const { body } = await this.httpClient.get(url);
+      const $ = cheerio.load(body);
+
+      let year = '';
+      let publisher = '';
+
+      // Find year: look for leaf node with text "Year" and get next sibling's text
+      $('*').each((_, el) => {
+        if ($(el).children().length === 0) {
+          const text = $(el).text().trim();
+          if (text === 'Year') {
+            const next = $(el).next();
+            if (next.length) {
+              year = next.text().trim();
+            }
+          }
+        }
+      });
+
+      // Find publisher: look in the text after author link
+      // The author link has class containing "line-clamp" and text is the author name
+      const authorLink = $('a.line-clamp-\\[2\\][href*="search?q="]').first();
+      if (authorLink.length) {
+        const parent = authorLink.parent();
+        const parentText = parent.text();
+
+        // Find the line after author name that contains publisher
+        const lines = parentText.split('\n');
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i].trim();
+          // Check if this is the author line (matches the link text)
+          if (line === authorLink.text().trim()) {
+            const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+            // Publisher line contains comma and looks like metadata
+            if (nextLine && nextLine.includes(',') && nextLine.length > 10 &&
+                !nextLine.includes('http') && !nextLine.includes('function')) {
+              const parts = nextLine.split(',');
+              const possiblePublisher = parts[0].trim();
+              if (possiblePublisher.length > 3 && possiblePublisher.length < 60) {
+                publisher = possiblePublisher;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      return { year, publisher };
+    } catch (error) {
+      logger.warn(`Failed to fetch book details for ${md5}: ${(error as Error).message}`);
+      return { year: '', publisher: '' };
+    }
+  }
 }
