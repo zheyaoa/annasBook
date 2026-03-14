@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import { BookInfo } from './types.js';
 import { logger } from './logger.js';
 
@@ -36,7 +36,10 @@ export class ExcelReader {
   }
 
   private getCellValue(row: number, col: string): string {
-    const cell = this.sheet[`${col}${row}`];
+    // XLSX cell references use 1-indexed rows (A1, B2, etc.)
+    // Our row parameter is 0-indexed, so we need to add 1
+    const cellRef = `${col}${row + 1}`;
+    const cell = this.sheet[cellRef];
     if (!cell) return '';
 
     // Handle formula cells
@@ -118,14 +121,14 @@ export class ExcelReader {
       }
     }
 
-    // Update download status
+    // Update download status (rowIndex is 0-indexed, Excel uses 1-indexed)
     const statusCol = colMap['下载状态'] || 'J';
-    this.sheet[`${statusCol}${rowIndex}`] = { t: 's', v: status };
+    this.sheet[`${statusCol}${rowIndex + 1}`] = { t: 's', v: status };
 
     // Update book link if provided
     if (bookLink) {
       const linkCol = colMap['书籍链接'] || 'K';
-      this.sheet[`${linkCol}${rowIndex}`] = { t: 's', v: bookLink };
+      this.sheet[`${linkCol}${rowIndex + 1}`] = { t: 's', v: bookLink };
     }
   }
 

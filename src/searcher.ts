@@ -3,9 +3,6 @@ import { Config, BookInfo, SearchResult } from './types.js';
 import { HttpClient } from './http-client.js';
 import { logger } from './logger.js';
 
-// Punctuation to ignore in title matching
-const PUNCTUATION_REGEX = /[:\-—,.!?'"]/g;
-
 export class Searcher {
   private config: Config;
   private httpClient: HttpClient;
@@ -182,6 +179,7 @@ export class Searcher {
           size: formatInfo.size,
           sizeBytes: formatInfo.sizeBytes,
           year: formatInfo.year,
+          publisher: '',
         });
       } catch (error) {
         logger.warn(`Failed to parse search result: ${(error as Error).message}`);
@@ -192,7 +190,56 @@ export class Searcher {
     return results;
   }
 
-  selectBestResult(results: SearchResult[], searchTitle: string): SearchResult | null {
+  // Standardize text for comparison
+  private normalize(text: string): string {
+    if (!text) return '';
+    return text.toLowerCase().replace(/&/g, 'and').replace(/\W+/g, '');
+  }
+
+  // Check if author matches (full name or surname)
+  private isAuthorMatch(searchAuthor: string, resultAuthor: string): boolean {
+    const normSearch = this.normalize(searchAuthor);
+    const normResult = this.normalize(resultAuthor);
+
+    // Full name match
+    if (normResult.includes(normSearch)) return true;
+
+    // Surname match (take last word)
+    const surname = normSearch.split(/\s+/).pop();
+    if (surname && surname.length > 1 && normResult.includes(surname)) return true;
+
+    return false;
+  }
+
+  // Check if title matches (segment matching)
+  private isTitleMatch(searchTitle: string, resultTitle: string): boolean {
+    const normSearch = this.normalize(searchTitle);
+    const normResult = this.normalize(resultTitle);
+
+    // Full match
+    if (normResult.includes(normSearch) || normSearch.includes(normResult)) return true;
+
+    // Segment matching: split by :;—-
+    const separators = /[:;—\-]/;
+    const searchSegments = searchTitle.split(separators).map(s => this.normalize(s.trim()));
+    const resultSegments = resultTitle.split(separators).map(s => this.normalize(s.trim()));
+
+    // Check if main title (first segment) matches
+    if (searchSegments[0] && resultSegments[0] && searchSegments[0] === resultSegments[0]) {
+      return true;
+    }
+
+    // Check if any segment matches exactly
+    for (const seg of searchSegments) {
+      if (seg && seg.length > 3 && resultSegments.includes(seg)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  selectBestResult(results: SearchResult[], searchTitle: string, searchAuthor?: string): SearchResult | null {
     if (results.length === 0) return null;
 
     // Filter by format priority: PDF > EPUB, and exclude empty titles
@@ -203,50 +250,46 @@ export class Searcher {
 
     if (candidates.length === 0) return null;
 
-    // Try exact title match (case-insensitive, ignoring punctuation)
-    const normalizedSearch = searchTitle.toLowerCase().replace(PUNCTUATION_REGEX, '');
+    // Score candidates
+    const scoredCandidates = candidates.map(r => {
+      let score = 0;
 
-    const exactMatches = candidates.filter(r => {
-      const normalizedResult = r.title.toLowerCase().replace(PUNCTUATION_REGEX, '');
-      return normalizedResult === normalizedSearch;
+      // Title matching (weight 60)
+      if (this.isTitleMatch(searchTitle, r.title)) {
+        score += 60;
+        // Main title exact match bonus
+        const searchMain = this.normalize(searchTitle.split(/[:;—\-]/)[0]);
+        const resultMain = this.normalize(r.title.split(/[:;—\-]/)[0]);
+        if (searchMain === resultMain) score += 20;
+      }
+
+      // Author matching (weight 30)
+      if (searchAuthor && r.author && this.isAuthorMatch(searchAuthor, r.author)) {
+        score += 30;
+      }
+
+      // File size bonus (weight 10)
+      if (r.sizeBytes > 0) {
+        const sizeScore = Math.min(10, r.sizeBytes / (10 * 1024 * 1024) * 10);
+        score += sizeScore;
+      }
+
+      return { result: r, score };
     });
 
-    if (exactMatches.length > 0) {
-      // If multiple exact matches, prefer larger file
-      exactMatches.sort((a, b) => b.sizeBytes - a.sizeBytes);
-      return exactMatches[0];
-    }
+    // Filter low score results (below 50 considered no match)
+    const validCandidates = scoredCandidates
+      .filter(c => c.score >= 50)
+      .sort((a, b) => b.score - a.score);
 
-    // No exact match - check for title similarity
-    // Return null if no candidate has reasonable title similarity
-    const similarityThreshold = 0.3; // At least 30% word overlap
-    const searchWords = new Set(normalizedSearch.split(/\s+/).filter(w => w.length > 2));
-
-    const candidatesWithSimilarity = candidates.map(r => {
-      const normalizedResult = r.title.toLowerCase().replace(PUNCTUATION_REGEX, '');
-      const resultWords = new Set(normalizedResult.split(/\s+/).filter(w => w.length > 2));
-
-      // Calculate Jaccard similarity
-      const intersection = [...searchWords].filter(w => resultWords.has(w)).length;
-      const union = new Set([...searchWords, ...resultWords]).size;
-      const similarity = union > 0 ? intersection / union : 0;
-
-      return { result: r, similarity };
-    });
-
-    // Filter candidates with sufficient similarity
-    const similarCandidates = candidatesWithSimilarity
-      .filter(c => c.similarity >= similarityThreshold)
-      .sort((a, b) => b.similarity - a.similarity);
-
-    if (similarCandidates.length === 0) {
-      logger.warn(`No similar results found for "${searchTitle}". Best candidate has similarity ${Math.max(...candidatesWithSimilarity.map(c => c.similarity)).toFixed(2)}`);
+    if (validCandidates.length === 0) {
+      const bestScore = Math.max(...scoredCandidates.map(c => c.score));
+      logger.warn(`No valid match for "${searchTitle}". Best score: ${bestScore}`);
       return null;
     }
 
-    // Return the most similar candidate
-    const best = similarCandidates[0];
-    logger.info(`Selected result with similarity ${(best.similarity * 100).toFixed(0)}%: "${best.result.title}"`);
+    const best = validCandidates[0];
+    logger.info(`Selected: "${best.result.title}" (score: ${best.score})`);
     return best.result;
   }
 }

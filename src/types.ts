@@ -8,6 +8,7 @@ export interface Config {
   requestTimeoutMs: number;
   downloadTimeoutMs: number;
   maxRetries: number;
+  proxy?: string; // Optional proxy URL, e.g., "http://127.0.0.1:7892"
 }
 
 // Book information from Excel
@@ -33,6 +34,7 @@ export interface SearchResult {
   size: string;
   sizeBytes: number;
   year: string;
+  publisher: string;
 }
 
 // Download result
