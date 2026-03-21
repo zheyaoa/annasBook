@@ -27,6 +27,7 @@ export interface BookInfo {
   confidence: string;
   downloadStatus: string;
   bookLink: string;
+  downloadUrl?: string;   // Excel 中已有的下载链接
 }
 
 export interface SearchResult {
@@ -45,6 +46,7 @@ export interface DownloadResult {
   success: boolean;
   filePath?: string;
   error?: string;
+  downloadUrl?: string;  // API 返回的下载链接
 }
 
 export interface ApiErrorResponse {

@@ -79,6 +79,7 @@ export class ExcelReader {
         confidence: this.getCellValue(row, colMap['置信度'] || 'I'),
         downloadStatus: this.getCellValue(row, colMap['下载状态'] || 'J'),
         bookLink: this.getCellValue(row, colMap['书籍链接'] || 'K'),
+        downloadUrl: this.getCellValue(row, colMap['下载链接'] || 'L'),
       };
 
       if (!book.chineseTitle && !book.englishTitle) {
@@ -118,6 +119,34 @@ export class ExcelReader {
       const linkCol = colMap['书籍链接'] || 'K';
       this.sheet[`${linkCol}${rowIndex + 1}`] = { t: 's', v: bookLink };
     }
+  }
+
+  updateDownloadUrl(rowIndex: number, downloadUrl: string): void {
+    const range = XLSX.utils.decode_range(this.sheet['!ref'] || 'A1');
+
+    // 查找"下载链接"列
+    const colMap: Record<string, string> = {};
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cell = this.sheet[XLSX.utils.encode_cell({ r: 0, c: col })];
+      if (cell && cell.v !== undefined) {
+        colMap[String(cell.v)] = XLSX.utils.encode_col(col);
+      }
+    }
+
+    let urlCol = colMap['下载链接'];
+    if (!urlCol) {
+      // 列不存在，创建新列
+      const newColIndex = range.e.c + 1;
+      urlCol = XLSX.utils.encode_col(newColIndex);
+      this.sheet[`${urlCol}1`] = { t: 's', v: '下载链接' };
+      // 更新 sheet 范围
+      this.sheet['!ref'] = XLSX.utils.encode_range({
+        s: range.s,
+        e: { r: range.e.r, c: newColIndex }
+      });
+    }
+
+    this.sheet[`${urlCol}${rowIndex + 1}`] = { t: 's', v: downloadUrl };
   }
 
   save(): void {

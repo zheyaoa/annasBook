@@ -6,6 +6,10 @@ import { logger } from './logger.js';
 
 const INVALID_CHARS_REGEX = /[/\\:*?"<>|]/g;
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export class Downloader {
   private config: Config;
   private httpClient: HttpClient;
@@ -90,54 +94,80 @@ export class Downloader {
 
     logger.info(`Downloading: ${filename}`);
 
-    const apiResult = await this.tryFastDownloadApi(result.md5);
+    // 优先使用 Excel 中已有的下载链接
+    let downloadUrl = book.downloadUrl;
 
-    if (!apiResult.success || !apiResult.downloadUrl) {
-      this.consecutiveFailures++;
-      return { success: false, error: apiResult.error || 'API download failed' };
+    if (!downloadUrl) {
+      // 没有现成链接，调用 API 获取
+      const apiResult = await this.tryFastDownloadApi(result.md5);
+      if (!apiResult.success || !apiResult.downloadUrl) {
+        this.consecutiveFailures++;
+        return { success: false, error: apiResult.error || 'API download failed' };
+      }
+      downloadUrl = apiResult.downloadUrl;
+    } else {
+      logger.info(`Using cached download URL from Excel`);
     }
 
-    const downloadUrl = apiResult.downloadUrl;
+    // 重试下载逻辑
+    const maxRetries = 3;
+    let lastError: string = '';
 
-    try {
-      await this.httpClient.download(downloadUrl, destPath);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.httpClient.download(downloadUrl, destPath);
 
-      const validationResult = this.validateDownloadedFile(destPath, result.format);
-      if (!validationResult.valid) {
-        fs.unlinkSync(destPath);
-        return { success: false, error: validationResult.error };
-      }
-
-      const actualFormat = validationResult.actualFormat || result.format;
-      if (actualFormat !== result.format) {
-        const newPath = destPath.replace(/\.[^.]+$/, `.${actualFormat}`);
-        if (!fs.existsSync(newPath)) {
-          fs.renameSync(destPath, newPath);
-          logger.info(`Format corrected: ${result.format} -> ${actualFormat}`);
+        // 验证文件
+        const validationResult = this.validateDownloadedFile(destPath, result.format);
+        if (!validationResult.valid) {
+          fs.unlinkSync(destPath);
+          return { success: false, error: validationResult.error, downloadUrl };
         }
+
+        // 处理格式修正
+        const actualFormat = validationResult.actualFormat || result.format;
+        if (actualFormat !== result.format) {
+          const newPath = destPath.replace(/\.[^.]+$/, `.${actualFormat}`);
+          if (!fs.existsSync(newPath)) {
+            fs.renameSync(destPath, newPath);
+            logger.info(`Format corrected: ${result.format} -> ${actualFormat}`);
+          }
+          this.consecutiveFailures = 0;
+          const actualSize = fs.statSync(newPath).size;
+          logger.info(`Downloaded: ${path.basename(newPath)} (${actualSize} bytes)`);
+          return { success: true, filePath: newPath, downloadUrl };
+        }
+
         this.consecutiveFailures = 0;
-        const actualSize = fs.statSync(newPath).size;
-        logger.info(`Downloaded: ${path.basename(newPath)} (${actualSize} bytes)`);
-        return { success: true, filePath: newPath };
+        const actualSize = fs.statSync(destPath).size;
+        logger.info(`Downloaded: ${filename} (${actualSize} bytes)`);
+        return { success: true, filePath: destPath, downloadUrl };
+
+      } catch (error) {
+        const errorMsg = (error as Error).message;
+        const isTimeout = errorMsg.toLowerCase().includes('timeout');
+
+        if (isTimeout && attempt < maxRetries) {
+          logger.warn(`Download timeout, retrying in 10s (attempt ${attempt}/${maxRetries})`);
+          await sleep(10000);
+          continue;
+        }
+
+        lastError = errorMsg;
+        break;  // 非超时错误，不重试
       }
-
-      this.consecutiveFailures = 0;
-      const actualSize = fs.statSync(destPath).size;
-      logger.info(`Downloaded: ${filename} (${actualSize} bytes)`);
-
-      return { success: true, filePath: destPath };
-    } catch (error) {
-      this.consecutiveFailures++;
-      const errorMsg = (error as Error).message;
-      logger.error(`Download failed: ${errorMsg}`);
-
-      if (this.consecutiveFailures >= 5) {
-        logger.error('5 consecutive download failures. Please check network, API key, or cookies.');
-        throw new Error('CONSECUTIVE_FAILURES');
-      }
-
-      return { success: false, error: errorMsg };
     }
+
+    // 下载失败
+    this.consecutiveFailures++;
+    logger.error(`Download failed: ${lastError}`);
+
+    if (this.consecutiveFailures >= 5) {
+      logger.error('5 consecutive download failures. Please check network, API key, or cookies.');
+      throw new Error('CONSECUTIVE_FAILURES');
+    }
+
+    return { success: false, error: lastError, downloadUrl };
   }
 
   extractMd5FromUrl(url: string): string | null {

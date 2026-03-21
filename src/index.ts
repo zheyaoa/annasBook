@@ -110,6 +110,9 @@ async function main(): Promise<void> {
 
       if (result.success) {
         excelReader.updateStatus(book.rowIndex, '已下载', `https://annas-archive.gl/md5/${searchResult.md5}`);
+        if (result.downloadUrl) {
+          excelReader.updateDownloadUrl(book.rowIndex, result.downloadUrl);
+        }
         downloaded++;
 
         if (config.downloadLimit && config.downloadLimit > 0 && downloaded >= config.downloadLimit) {
@@ -125,6 +128,10 @@ async function main(): Promise<void> {
         } else {
           excelReader.updateStatus(book.rowIndex, `下载失败: ${result.error}`);
           failed++;
+        }
+        // 无论成功失败，都记录下载链接
+        if (result.downloadUrl) {
+          excelReader.updateDownloadUrl(book.rowIndex, result.downloadUrl);
         }
       }
 
