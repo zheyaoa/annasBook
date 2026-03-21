@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Config, SearchResult, BookInfo, DownloadResult, ApiErrorResponse } from './types.js';
+import { Config, SearchResult, BookInfo, DownloadResult, FastDownloadResponse, FastDownloadApiResult, ApiErrorResponse } from './types.js';
 import { HttpClient } from './http-client.js';
 import { logger } from './logger.js';
 
@@ -62,6 +62,57 @@ export class Downloader {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Try the JSON API for fast download.
+   * Returns download URL if successful, or indicates whether to fallback.
+   */
+  private async tryFastDownloadApi(md5: string): Promise<FastDownloadApiResult> {
+    const url = `${this.config.baseUrl}/dyn/api/fast_download.json?md5=${md5}&key=${this.config.apiKey}`;
+
+    try {
+      logger.info(`[API] Trying JSON API: ${url.replace(this.config.apiKey, '***')}`);
+      const response = await this.httpClient.get(url);
+
+      // Check for CAPTCHA
+      if (this.httpClient.isCaptchaResponse(response.body, response.status)) {
+        logger.warn('[API] CAPTCHA detected, falling back to cookies');
+        return { success: false, shouldFallback: true, error: 'CAPTCHA detected' };
+      }
+
+      // Parse JSON response
+      const data: FastDownloadResponse = JSON.parse(response.body);
+
+      if (data.download_url) {
+        logger.info('[API] Got download URL from API');
+        return { success: true, downloadUrl: data.download_url };
+      }
+
+      // Handle API errors
+      const error = data.error || 'Unknown error';
+      logger.warn(`[API] API error: ${error}`);
+
+      // Determine if we should fallback
+      const fallbackErrors = ['invalid_key', 'membership_required'];
+      const shouldFallback = fallbackErrors.includes(error) || response.status >= 500;
+
+      return {
+        success: false,
+        shouldFallback,
+        error
+      };
+    } catch (error) {
+      const errorMsg = (error as Error).message;
+      logger.error(`[API] API request failed: ${errorMsg}`);
+
+      // Network errors should fallback
+      return {
+        success: false,
+        shouldFallback: true,
+        error: errorMsg
+      };
     }
   }
 
