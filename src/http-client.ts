@@ -20,7 +20,6 @@ export class HttpClient {
       headers: this.getHeaders(),
     });
 
-    // Configure proxy if specified
     if (this.config.proxy) {
       try {
         const proxyUrl = new URL(this.config.proxy);
@@ -37,7 +36,6 @@ export class HttpClient {
     return instance;
   }
 
-  // Method to reload cookies (e.g., after user solves CAPTCHA)
   reloadCookies(): void {
     this.cookies = this.loadCookies();
     this.axiosInstance.defaults.headers = this.getHeaders() as unknown as typeof this.axiosInstance.defaults.headers;
@@ -54,7 +52,6 @@ export class HttpClient {
       const content = fs.readFileSync(cookiePath, 'utf-8');
       const data = JSON.parse(content);
 
-      // Handle different cookie formats
       if (typeof data === 'string') {
         return data;
       }
@@ -70,7 +67,6 @@ export class HttpClient {
       return '';
     } catch (error) {
       logger.warn(`Failed to load cookies: ${(error as Error).message}`);
-      // Delete corrupted file
       try {
         fs.unlinkSync(cookiePath);
         logger.info('Deleted corrupted cookies.json');
@@ -81,9 +77,17 @@ export class HttpClient {
 
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-US;q=0.7',
+      'sec-ch-ua': '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"macOS"',
+      'sec-fetch-dest': 'document',
+      'sec-fetch-mode': 'navigate',
+      'sec-fetch-site': 'none',
+      'sec-fetch-user': '?1',
+      'upgrade-insecure-requests': '1',
     };
 
     if (this.cookies) {
@@ -114,8 +118,38 @@ export class HttpClient {
     }
   }
 
+  async getJson<T>(url: string, timeoutMs?: number): Promise<{ status: number; body: T }> {
+    const timeout = timeoutMs || this.config.requestTimeoutMs;
+
+    try {
+      const response = await this.axiosInstance.get(url, {
+        timeout,
+        headers: this.getHeaders(),
+      });
+
+      return { status: response.status, body: response.data };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          return { status: error.response.status, body: error.response.data };
+        }
+        throw new Error(`Network error: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
   async download(url: string, destPath: string): Promise<string> {
     const timeout = this.config.downloadTimeoutMs;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      logger.warn(`[Download] Timeout after ${timeout / 1000}s, aborting`);
+    }, timeout);
+
+    const startTime = Date.now();
+    logger.info(`[Download] Starting download, timeout: ${timeout / 1000}s`);
 
     try {
       const response = await this.axiosInstance.get(url, {
@@ -123,44 +157,48 @@ export class HttpClient {
         timeout,
         headers: this.getHeaders(),
         maxRedirects: 5,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+      const elapsed = Date.now() - startTime;
 
       if (response.status !== 200) {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const contentLength = response.headers['content-length'];
-      const expectedSize = contentLength ? parseInt(contentLength, 10) : 0;
+      const dataSize = response.data?.byteLength || 0;
+      logger.info(`[Download] Received ${dataSize} bytes in ${elapsed / 1000}s`);
 
       const tempPath = `${destPath}.tmp`;
       fs.writeFileSync(tempPath, response.data);
-
-      // Rename to final path
       fs.renameSync(tempPath, destPath);
 
-      // Return final URL (after redirects) for format detection
       return response.request?.res?.responseUrl || url;
     } catch (error) {
-      // Cleanup temp file
+      clearTimeout(timeoutId);
       const tempPath = `${destPath}.tmp`;
       if (fs.existsSync(tempPath)) {
         fs.unlinkSync(tempPath);
       }
       if (axios.isAxiosError(error)) {
+        if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+          throw new Error(`Download timeout (${timeout / 1000}s exceeded)`);
+        }
         throw new Error(`Download failed: ${error.message}`);
       }
       throw error;
     }
   }
 
-  isCaptchaResponse(body: string, status: number): boolean {
-    // Check for CAPTCHA patterns regardless of status code
-    // (CAPTCHA can be returned with various status codes including 200)
+  isCaptchaResponse(body: string | object, status: number): boolean {
+    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+
     if (
-      body.includes('challenge-running') ||
-      body.includes('cf-turnstile') ||
-      body.includes('g-recaptcha') ||
-      body.includes('h-captcha')
+      bodyStr.includes('challenge-running') ||
+      bodyStr.includes('cf-turnstile') ||
+      bodyStr.includes('g-recaptcha') ||
+      bodyStr.includes('h-captcha')
     ) {
       return true;
     }

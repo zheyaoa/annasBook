@@ -36,23 +36,18 @@ export class ExcelReader {
   }
 
   private getCellValue(row: number, col: string): string {
-    // XLSX cell references use 1-indexed rows (A1, B2, etc.)
-    // Our row parameter is 0-indexed, so we need to add 1
     const cellRef = `${col}${row + 1}`;
     const cell = this.sheet[cellRef];
     if (!cell) return '';
 
-    // Handle formula cells
     if (cell.t === 'f' && cell.v === undefined) {
       return cell.w || '';
     }
 
-    // Convert to string
     if (cell.v === null || cell.v === undefined) {
       return '';
     }
 
-    // Handle dates
     if (cell.t === 'd') {
       return cell.v.toISOString();
     }
@@ -65,7 +60,6 @@ export class ExcelReader {
     const books: BookInfo[] = [];
     const seenBooks = new Set<string>();
 
-    // Find column indices
     const colMap: Record<string, string> = {};
     for (let col = range.s.c; col <= range.e.c; col++) {
       const cell = this.sheet[XLSX.utils.encode_cell({ r: 0, c: col })];
@@ -74,7 +68,6 @@ export class ExcelReader {
       }
     }
 
-    // Read rows (skip header)
     for (let row = range.s.r + 1; row <= range.e.r; row++) {
       const book: BookInfo = {
         rowIndex: row,
@@ -88,13 +81,11 @@ export class ExcelReader {
         bookLink: this.getCellValue(row, colMap['书籍链接'] || 'K'),
       };
 
-      // Skip rows with missing required fields
       if (!book.chineseTitle && !book.englishTitle) {
         logger.warn(`Row ${row}: Skipping - both titles are empty`);
         continue;
       }
 
-      // Check for duplicates
       const key = `${book.chineseTitle}|${book.englishTitle}`;
       if (seenBooks.has(key)) {
         logger.info(`Row ${row}: Skipping duplicate entry - ${book.chineseTitle || book.englishTitle}`);
@@ -112,7 +103,6 @@ export class ExcelReader {
   updateStatus(rowIndex: number, status: string, bookLink?: string): void {
     const range = XLSX.utils.decode_range(this.sheet['!ref'] || 'A1');
 
-    // Find column indices
     const colMap: Record<string, string> = {};
     for (let col = range.s.c; col <= range.e.c; col++) {
       const cell = this.sheet[XLSX.utils.encode_cell({ r: 0, c: col })];
@@ -121,11 +111,9 @@ export class ExcelReader {
       }
     }
 
-    // Update download status (rowIndex is 0-indexed, Excel uses 1-indexed)
     const statusCol = colMap['下载状态'] || 'J';
     this.sheet[`${statusCol}${rowIndex + 1}`] = { t: 's', v: status };
 
-    // Update book link if provided
     if (bookLink) {
       const linkCol = colMap['书籍链接'] || 'K';
       this.sheet[`${linkCol}${rowIndex + 1}`] = { t: 's', v: bookLink };

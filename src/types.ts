@@ -1,4 +1,3 @@
-// Configuration interface
 export interface Config {
   apiKey: string;
   baseUrl: string;
@@ -18,20 +17,18 @@ export interface Config {
   };
 }
 
-// Book information from Excel
 export interface BookInfo {
   rowIndex: number;       // Excel row number (1-based, for updates)
-  language: string;       // 语言 - determines search title: "en" = use englishTitle, else use chineseTitle
-  chineseTitle: string;   // 书名
-  englishTitle: string;   // Book title
-  chineseAuthor: string;  // 作者
-  englishAuthor: string;  // Author
-  confidence: string;     // 置信度
-  downloadStatus: string; // 下载状态
-  bookLink: string;       // 书籍链接
+  language: string;       // "en" uses englishTitle, else uses chineseTitle
+  chineseTitle: string;
+  englishTitle: string;
+  chineseAuthor: string;
+  englishAuthor: string;
+  confidence: string;
+  downloadStatus: string;
+  bookLink: string;
 }
 
-// Search result from Anna's Archive
 export interface SearchResult {
   md5: string;
   title: string;
@@ -44,34 +41,28 @@ export interface SearchResult {
   publisher: string;
 }
 
-// Download result
 export interface DownloadResult {
   success: boolean;
   filePath?: string;
   error?: string;
 }
 
-// API error response
 export interface ApiErrorResponse {
   error: string;
 }
 
-// Cookie format
 export interface CookieData {
   [key: string]: string;
 }
 
-// Fast download API response
 export interface FastDownloadResponse {
   download_url: string | null;
   error?: string;
   account_fast_download_info?: Record<string, unknown>;
 }
 
-// Result of trying fast download API
 export interface FastDownloadApiResult {
   success: boolean;
   downloadUrl?: string;
-  shouldFallback?: boolean;
   error?: string;
 }

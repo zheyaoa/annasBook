@@ -4,7 +4,6 @@ import { Config, SearchResult, BookInfo, DownloadResult, FastDownloadResponse, F
 import { HttpClient } from './http-client.js';
 import { logger } from './logger.js';
 
-// Invalid filesystem characters
 const INVALID_CHARS_REGEX = /[/\\:*?"<>|]/g;
 
 export class Downloader {
@@ -18,16 +17,13 @@ export class Downloader {
   }
 
   private generateFilename(book: BookInfo, result: SearchResult): string {
-    // Determine titles based on language
     let chineseTitle: string;
     let englishTitle: string;
 
     if (book.language === 'zh') {
-      // Search result is Chinese title
       chineseTitle = (result.title || '').replace(INVALID_CHARS_REGEX, '_').trim();
       englishTitle = (book.englishTitle || '').replace(INVALID_CHARS_REGEX, '_').trim();
     } else {
-      // Search result is English title (default)
       englishTitle = (result.title || '').replace(INVALID_CHARS_REGEX, '_').trim();
       chineseTitle = (book.chineseTitle || '').replace(INVALID_CHARS_REGEX, '_').trim();
     }
@@ -36,17 +32,14 @@ export class Downloader {
     const year = result.year || '';
     const publisher = (result.publisher || '').replace(INVALID_CHARS_REGEX, '_').trim();
 
-    // Build filename: {中文书名}_{英文书名}_{作者}_{年份}_{出版社}
-    let parts = [chineseTitle, englishTitle, author, year, publisher].filter(p => p);
+    const parts = [chineseTitle, englishTitle, author, year, publisher].filter(p => p);
     let filename = parts.join('_');
 
-    // Limit length
     while (filename.length > 200 && parts.length > 2) {
-      parts = parts.slice(0, -1);  // Remove last part (publisher)
+      parts.pop();
       filename = parts.join('_');
     }
 
-    // Fallback if still empty
     if (!filename) {
       filename = `Unknown-Book-${book.rowIndex}`;
     }
@@ -54,74 +47,41 @@ export class Downloader {
     return `${filename}.${result.format}`;
   }
 
-  private checkDiskSpace(): boolean {
-    // Simple check - warn if downloads directory is getting full
-    // In production, would use proper disk space check
-    try {
-      const stats = fs.statSync(this.config.downloadDir);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Try the JSON API for fast download.
-   * Returns download URL if successful, or indicates whether to fallback.
-   */
   private async tryFastDownloadApi(md5: string): Promise<FastDownloadApiResult> {
     const url = `${this.config.baseUrl}/dyn/api/fast_download.json?md5=${md5}&key=${this.config.apiKey}`;
 
     try {
       logger.info(`[API] Trying JSON API: ${url.replace(this.config.apiKey, '***')}`);
-      const response = await this.httpClient.get(url);
+      const response = await this.httpClient.getJson<FastDownloadResponse>(url);
 
-      // Check for CAPTCHA
       if (this.httpClient.isCaptchaResponse(response.body, response.status)) {
-        logger.warn('[API] CAPTCHA detected, falling back to cookies');
-        return { success: false, shouldFallback: true, error: 'CAPTCHA detected' };
+        logger.error('[API] CAPTCHA detected');
+        return { success: false, error: 'CAPTCHA detected' };
       }
 
-      // Parse JSON response
-      const data: FastDownloadResponse = JSON.parse(response.body);
+      const data = response.body;
 
       if (data.download_url) {
         logger.info('[API] Got download URL from API');
         return { success: true, downloadUrl: data.download_url };
       }
 
-      // Handle API errors
       const error = data.error || 'Unknown error';
-      logger.warn(`[API] API error: ${error}`);
+      logger.error(`[API] API error: ${error}`);
 
-      // Determine if we should fallback
-      const fallbackErrors = ['invalid_key', 'membership_required'];
-      const shouldFallback = fallbackErrors.includes(error) || response.status >= 500;
-
-      return {
-        success: false,
-        shouldFallback,
-        error
-      };
+      return { success: false, error };
     } catch (error) {
       const errorMsg = (error as Error).message;
       logger.error(`[API] API request failed: ${errorMsg}`);
 
-      // Network errors should fallback
-      return {
-        success: false,
-        shouldFallback: true,
-        error: errorMsg
-      };
+      return { success: false, error: errorMsg };
     }
   }
 
   async download(book: BookInfo, result: SearchResult): Promise<DownloadResult> {
-    // Generate filename first
     const filename = this.generateFilename(book, result);
     const destPath = path.join(this.config.downloadDir, filename);
 
-    // Check if file already exists
     if (fs.existsSync(destPath)) {
       logger.info(`File already exists: ${filename}`);
       this.consecutiveFailures = 0;
@@ -130,39 +90,24 @@ export class Downloader {
 
     logger.info(`Downloading: ${filename}`);
 
-    // Try JSON API first
     const apiResult = await this.tryFastDownloadApi(result.md5);
 
-    let downloadUrl: string;
-    let usedFallback = false;
-
-    if (apiResult.success && apiResult.downloadUrl) {
-      // Use API download URL
-      downloadUrl = apiResult.downloadUrl;
-    } else if (apiResult.shouldFallback) {
-      // Fallback to cookies-based download
-      logger.info('[Download] Falling back to cookies-based download');
-      downloadUrl = `${this.config.baseUrl}/fast_download/${result.md5}/0/0`;
-      usedFallback = true;
-    } else {
-      // Non-recoverable error
+    if (!apiResult.success || !apiResult.downloadUrl) {
       this.consecutiveFailures++;
-      return { success: false, error: apiResult.error || 'Download failed' };
+      return { success: false, error: apiResult.error || 'API download failed' };
     }
 
-    try {
-      // Download file
-      const finalUrl = await this.httpClient.download(downloadUrl, destPath);
+    const downloadUrl = apiResult.downloadUrl;
 
-      // Verify the downloaded file is valid (not an HTML error page)
+    try {
+      await this.httpClient.download(downloadUrl, destPath);
+
       const validationResult = this.validateDownloadedFile(destPath, result.format);
       if (!validationResult.valid) {
-        // Delete the invalid file
         fs.unlinkSync(destPath);
         return { success: false, error: validationResult.error };
       }
 
-      // Handle format correction if actual format differs from expected
       const actualFormat = validationResult.actualFormat || result.format;
       if (actualFormat !== result.format) {
         const newPath = destPath.replace(/\.[^.]+$/, `.${actualFormat}`);
@@ -172,13 +117,13 @@ export class Downloader {
         }
         this.consecutiveFailures = 0;
         const actualSize = fs.statSync(newPath).size;
-        logger.info(`Downloaded: ${path.basename(newPath)} (${actualSize} bytes)${usedFallback ? ' [fallback]' : ''}`);
+        logger.info(`Downloaded: ${path.basename(newPath)} (${actualSize} bytes)`);
         return { success: true, filePath: newPath };
       }
 
       this.consecutiveFailures = 0;
       const actualSize = fs.statSync(destPath).size;
-      logger.info(`Downloaded: ${filename} (${actualSize} bytes)${usedFallback ? ' [fallback]' : ''}`);
+      logger.info(`Downloaded: ${filename} (${actualSize} bytes)`);
 
       return { success: true, filePath: destPath };
     } catch (error) {
@@ -213,17 +158,15 @@ export class Downloader {
     try {
       const buffer = fs.readFileSync(filePath);
 
-      // Check for HTML content (error page)
       const header = buffer.subarray(0, 100).toString('utf8').toLowerCase();
       if (header.includes('<!doctype html') || header.includes('<html')) {
         logger.error('Downloaded file is HTML, not the expected format');
         return { valid: false, error: 'Download returned HTML page instead of book file. The book may not be available or cookies may be expired.' };
       }
 
-      // Check actual file format by magic number
       const fileHeader = buffer.subarray(0, 4);
       const isPdf = fileHeader.toString('ascii') === '%PDF';
-      const isEpub = fileHeader[0] === 0x50 && fileHeader[1] === 0x4B; // PK signature (ZIP/EPUB)
+      const isEpub = fileHeader[0] === 0x50 && fileHeader[1] === 0x4B;
 
       if (expectedFormat === 'pdf') {
         if (isPdf) {

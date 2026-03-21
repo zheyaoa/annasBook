@@ -1,8 +1,22 @@
 import fs from 'fs';
+import path from 'path';
 
 type LogLevel = 'INFO' | 'WARN' | 'ERROR';
 
-const LOG_FILE = './logs/download.log';
+const COLORS = {
+  INFO: '\x1b[0m',    // Default/white
+  WARN: '\x1b[33m',   // Yellow
+  ERROR: '\x1b[31m',  // Red
+  RESET: '\x1b[0m',
+};
+
+function getLogFilePath(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `./logs/download-${year}-${month}-${day}.log`;
+}
 
 function formatTimestamp(): string {
   const now = new Date();
@@ -19,18 +33,23 @@ function log(level: LogLevel, message: string): void {
   const timestamp = formatTimestamp();
   const logLine = `[${timestamp}] [${level}] ${message}`;
 
-  // Console output
+  const color = COLORS[level];
+  const coloredLogLine = `${color}${logLine}${COLORS.RESET}`;
   if (level === 'ERROR') {
-    console.error(logLine);
+    console.error(coloredLogLine);
   } else if (level === 'WARN') {
-    console.warn(logLine);
+    console.warn(coloredLogLine);
   } else {
-    console.log(logLine);
+    console.log(coloredLogLine);
   }
 
-  // File output
+  const logFile = getLogFilePath();
   try {
-    fs.appendFileSync(LOG_FILE, logLine + '\n');
+    const logDir = path.dirname(logFile);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    fs.appendFileSync(logFile, logLine + '\n');
   } catch (error) {
     console.error(`Failed to write to log file: ${(error as Error).message}`);
   }

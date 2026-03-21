@@ -138,8 +138,6 @@ export class Searcher {
     console.log('Press Enter to continue (or type "quit" to abort)...');
     console.log('='.repeat(60) + '\n');
 
-    // In a real implementation, we'd wait for user input
-    // For now, return empty array and let main loop handle it
     throw new Error('CAPTCHA_DETECTED');
   }
 
@@ -187,11 +185,9 @@ export class Searcher {
       }
     });
 
-    logger.info(`Found ${results.length} results for "${searchTitle}"`);
     return results;
   }
 
-  // Standardize text for comparison
   private normalize(text: string): string {
     if (!text) return '';
     return text.toLowerCase()
@@ -204,75 +200,107 @@ export class Searcher {
       .replace(/\W+/g, '');
   }
 
-  // Check if language matches
+  private stripSeriesName(title: string): string {
+    const seriesPatterns = [
+      /\s*\([^)]*[Ss]eries[^)]*\)/g,      // (SUNY series in Chinese Philosophy)
+      /\s*\([^)]*[Ss]tudies[^)]*\)/g,     // (Cambridge Studies in...)
+      /\s*\(SUNY[^)]*\)/g,                // (SUNY series...)
+    ];
+
+    let stripped = title;
+    for (const pattern of seriesPatterns) {
+      stripped = stripped.replace(pattern, '');
+    }
+    return stripped.trim();
+  }
+
   private isLanguageMatch(bookLanguage: string, resultLanguage: string): boolean {
-    if (!bookLanguage || !resultLanguage) return true; // No info, don't filter
+    if (!bookLanguage || !resultLanguage) return true;
 
     const langCode = bookLanguage.toLowerCase();
-    // resultLanguage format: "English [en]" or "Chinese [zh]"
     const match = resultLanguage.match(/\[([a-z-]+)\]/i);
     const resultCode = match ? match[1].toLowerCase() : '';
 
-    // en matches en, en-us, en-gb etc.
     if (langCode === 'en') return resultCode.startsWith('en');
     if (langCode === 'zh') return resultCode.startsWith('zh');
     return resultCode.includes(langCode);
   }
 
-  // Check if author matches (full name or surname)
   private isAuthorMatch(searchAuthor: string, resultAuthor: string): boolean {
-    const normSearch = this.normalize(searchAuthor);
     const normResult = this.normalize(resultAuthor);
 
-    // Full name match
-    if (normResult.includes(normSearch)) return true;
+    const searchAuthors = searchAuthor
+      .split(';')
+      .map(a => a.replace(/\(.*?\)/g, '').trim())
+      .filter(a => a.length > 0);
 
-    // Surname match: extract from original string before normalizing
-    const cleanSearch = searchAuthor
-      .replace(/\(.*?\)/g, '')      // Remove (Translator), (Editor), etc.
-      .replace(/\btrans\.?\b/gi, '') // Remove trans., trans
-      .trim();
-    const surname = cleanSearch.split(/\s+/).pop()?.toLowerCase() || '';
+    for (const author of searchAuthors) {
+      const normSearch = this.normalize(author);
 
-    if (surname && surname.length > 1 && normResult.includes(surname)) return true;
+      if (normResult.includes(normSearch)) return true;
 
-    return false;
-  }
+      const parts = author.split(/\s+/).filter(p => p.length > 1);
+      if (parts.length < 2) continue;
 
-  // Check if title matches (segment matching)
-  private isTitleMatch(searchTitle: string, resultTitle: string): boolean {
-    const normSearch = this.normalize(searchTitle);
-    const normResult = this.normalize(resultTitle);
+      const reversed = parts.slice().reverse().join('');
+      const normReversed = reversed.toLowerCase().replace(/\W+/g, '');
+      if (normResult.includes(normReversed)) return true;
 
-    // Skip empty normalized titles (e.g., Chinese-only titles when searching English)
-    if (!normResult || !normSearch) return false;
+      const surname = parts[parts.length - 1].toLowerCase();
+      if (surname.length > 2 && normResult.includes(surname)) return true;
 
-    // Full match
-    if (normResult.includes(normSearch) || normSearch.includes(normResult)) return true;
-
-    // Segment matching: split by :;—-
-    const separators = /[:;—\-]/;
-    const searchSegments = searchTitle.split(separators).map(s => this.normalize(s.trim()));
-    const resultSegments = resultTitle.split(separators).map(s => this.normalize(s.trim()));
-
-    // Check if main title (first segment) matches
-    if (searchSegments[0] && resultSegments[0] && searchSegments[0] === resultSegments[0]) {
-      return true;
+      const firstName = parts[0];
+      if (firstName.length <= 3 || firstName.endsWith('.')) {
+        const firstInitial = firstName.charAt(0).toLowerCase();
+        if (normResult.charAt(0) === firstInitial && normResult.includes(surname)) {
+          return true;
+        }
+      }
     }
 
     return false;
   }
 
-  // Use LLM to determine which candidate best matches the search title
+  private isTitleMatch(searchTitle: string, resultTitle: string): boolean {
+    const strippedResult = this.stripSeriesName(resultTitle);
+
+    const normSearch = this.normalize(searchTitle);
+    const normResult = this.normalize(strippedResult);
+
+    if (!normResult || !normSearch) return false;
+
+    if (normResult.includes(normSearch) || normSearch.includes(normResult)) return true;
+
+    const separators = /[:;—\-]/;
+    const searchSegments = searchTitle.split(separators).map(s => this.normalize(s.trim()));
+    const resultSegments = strippedResult.split(separators).map(s => this.normalize(s.trim()));
+
+    if (searchSegments[0] && resultSegments[0] && searchSegments[0] === resultSegments[0]) {
+      return true;
+    }
+
+    if (normSearch.length > 10) {
+      const prefixLen = Math.floor(normSearch.length * 0.7);
+      const searchPrefix = normSearch.substring(0, prefixLen);
+      if (normResult.includes(searchPrefix)) return true;
+    }
+
+    return false;
+  }
+
   private async llmBatchMatch(searchTitle: string, candidates: SearchResult[]): Promise<SearchResult | null> {
     const openaiEnabled = this.config.openai?.enable !== false && this.config.openai?.apiKey;
     if (!openaiEnabled || candidates.length === 0) {
       return null;
     }
 
-    // Build candidate list for prompt
-    const candidateList = candidates.map((c, i) => `${i + 1}. "${c.title}"`).join('\n');
+    // Build candidate list with more context
+    const candidateList = candidates.map((c, i) =>
+      `${i + 1}. "${c.title}" by ${c.author || 'Unknown'} (${c.size})`
+    ).join('\n');
+
     const prompt = `Determine which candidate refers to the same book as the search title.
+A book may have different subtitle, series name, or edition. Focus on the main title.
 
 Search: "${searchTitle}"
 
@@ -281,16 +309,9 @@ ${candidateList}
 
 Reply only the number of the best match, or "none" if no match.`;
 
-    // DEBUG: Print prompt without calling API
-    console.log('\n========== LLM PROMPT ==========');
-    console.log(prompt);
-    console.log('================================\n');
-    return null;  // Skip actual API call for debugging
-
-    /*  // Actual API call (commented for debugging)
     try {
-      // Build API URL - handle if baseUrl already contains /chat/completions
-      let apiUrl = this.config.openai.baseUrl || 'https://api.openai.com/v1';
+      // Build API URL
+      let apiUrl = this.config.openai?.baseUrl || 'https://api.openai.com/v1';
       if (!apiUrl.includes('/chat/completions')) {
         apiUrl = apiUrl.replace(/\/$/, '') + '/chat/completions';
       }
@@ -299,10 +320,10 @@ Reply only the number of the best match, or "none" if no match.`;
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.openai.apiKey}`,
+          'Authorization': `Bearer ${this.config.openai?.apiKey}`,
         },
         body: JSON.stringify({
-          model: this.config.openai.model,
+          model: this.config.openai?.model || 'gpt-3.5-turbo',
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 10,
           temperature: 0,
@@ -316,12 +337,9 @@ Reply only the number of the best match, or "none" if no match.`;
 
       const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
       const content = data.choices?.[0]?.message?.content?.trim().toLowerCase() || '';
-      logger.info(`LLM response for "${searchTitle}": ${content}`);
 
       // Parse response - expect a number or "none"
-      if (content === 'none') {
-        return null;
-      }
+      if (content === 'none') return null;
 
       const matchIndex = parseInt(content) - 1;
       if (matchIndex >= 0 && matchIndex < candidates.length) {
@@ -333,39 +351,30 @@ Reply only the number of the best match, or "none" if no match.`;
       logger.warn(`LLM batch match failed: ${(error as Error).message}`);
       return null;
     }
-    */
   }
 
-  // Filter candidates based on volume and other metadata
   private preFilterCandidates(searchTitle: string, candidates: SearchResult[]): SearchResult[] {
     return candidates.filter(r => {
-      // Volume filter: if search title has "Volume X", candidate must match
       const searchVolume = searchTitle.match(/volume\s*(\d+)/i)?.[1];
       const resultVolume = r.title.match(/volume\s*(\d+)/i)?.[1];
       if (searchVolume && resultVolume && searchVolume !== resultVolume) {
         return false;
       }
-
       return true;
     });
   }
 
   async selectBestResult(results: SearchResult[], searchTitle: string, searchAuthor?: string, bookLanguage?: string): Promise<SearchResult | null> {
     if (results.length === 0) return null;
-    logger.info(`[Filter] Starting with ${results.length} results`);
 
-    // Filter by format priority: PDF > EPUB, and exclude empty titles
     const pdfResults = results.filter(r => r.format === 'pdf' && r.title);
     const epubResults = results.filter(r => r.format === 'epub' && r.title);
-    logger.info(`[Filter] Format: ${pdfResults.length} PDF, ${epubResults.length} EPUB`);
 
     let candidates = pdfResults.length > 0 ? pdfResults : epubResults;
 
     // Filter by language
     if (bookLanguage) {
-      const beforeLang = candidates.length;
       const langFiltered = candidates.filter(r => this.isLanguageMatch(bookLanguage, r.language));
-      logger.info(`[Filter] Language (${bookLanguage}): ${beforeLang} → ${langFiltered.length}`);
       if (langFiltered.length === 0) {
         logger.warn(`No results match language: ${bookLanguage}`);
         return null;
@@ -377,18 +386,7 @@ Reply only the number of the best match, or "none" if no match.`;
 
     // Filter by author
     if (searchAuthor) {
-      const beforeAuthor = candidates.length;
       const authorFiltered = candidates.filter(r => r.author && this.isAuthorMatch(searchAuthor, r.author));
-      logger.info(`[Filter] Author ("${searchAuthor}"): ${beforeAuthor} → ${authorFiltered.length}`);
-
-      // DEBUG: Show candidates that failed author match
-      const failedAuthorMatch = candidates.filter(r => !r.author || !this.isAuthorMatch(searchAuthor, r.author));
-      if (failedAuthorMatch.length > 0) {
-        logger.info(`[DEBUG] ${failedAuthorMatch.length} candidates failed author match:`);
-        failedAuthorMatch.slice(0, 10).forEach((r, i) => {
-          logger.info(`  ${i + 1}. Author: "${r.author}" | Title: ${r.title.substring(0, 60)}...`);
-        });
-      }
 
       if (authorFiltered.length === 0) {
         logger.warn(`No results match author: ${searchAuthor}`);
@@ -397,14 +395,11 @@ Reply only the number of the best match, or "none" if no match.`;
       candidates = authorFiltered;
     }
 
-    // Score candidates
     const scoredCandidates = candidates.map(r => {
       let score = 0;
 
-      // Title matching
       if (this.isTitleMatch(searchTitle, r.title)) {
         score += 60;
-        // Main title exact match bonus
         const searchMain = this.normalize(searchTitle.split(/[:;—\-]/)[0]);
         const resultMain = this.normalize(r.title.split(/[:;—\-]/)[0]);
         if (searchMain === resultMain) score += 20;
@@ -413,34 +408,24 @@ Reply only the number of the best match, or "none" if no match.`;
       return { result: r, score };
     });
 
-    // Filter low score results (below 50 considered no match)
+    const SCORE_THRESHOLD = 40;
     let validCandidates = scoredCandidates
-      .filter(c => c.score >= 50)
+      .filter(c => c.score >= SCORE_THRESHOLD)
       .sort((a, b) => b.score - a.score);
 
-    // If no valid candidates and OpenAI is configured, try LLM matching
     const openaiEnabled = this.config.openai?.enable !== false && this.config.openai?.apiKey;
     if (validCandidates.length === 0 && openaiEnabled) {
       logger.info(`Traditional matching failed, trying LLM for "${searchTitle}"...`);
 
-      // Pre-filter candidates (volume match, etc.)
       const filtered = this.preFilterCandidates(searchTitle, candidates);
-      logger.info(`Pre-filter: ${candidates.length} → ${filtered.length} candidates (volume filter)`);
 
-      // Sort by size (larger files preferred), take top 10
       const topCandidates = filtered
         .sort((a, b) => b.sizeBytes - a.sizeBytes)
         .slice(0, 10);
 
-      logger.info(`Top 10 candidates for LLM:`);
-      topCandidates.forEach((c, i) => {
-        logger.info(`  ${i + 1}. ${c.title.substring(0, 80)}... (${c.size})`);
-      });
-
       if (topCandidates.length > 0) {
         const llmMatch = await this.llmBatchMatch(searchTitle, topCandidates);
         if (llmMatch) {
-          logger.info(`LLM matched: "${llmMatch.title}"`);
           validCandidates = [{ result: llmMatch, score: 60 }];
         }
       }
@@ -452,12 +437,9 @@ Reply only the number of the best match, or "none" if no match.`;
       return null;
     }
 
-    const best = validCandidates[0];
-    logger.info(`Selected: "${best.result.title}" (score: ${best.score})`);
-    return best.result;
+    return validCandidates[0].result;
   }
 
-  // Fetch book details from detail page to get year and publisher
   async fetchBookDetails(md5: string): Promise<{ year: string; publisher: string }> {
     const url = `${this.config.baseUrl}/md5/${md5}`;
     try {

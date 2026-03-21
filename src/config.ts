@@ -12,7 +12,7 @@ const DEFAULT_CONFIG: Config = {
   downloadTimeoutMs: 300000,
   maxRetries: 3,
   proxy: process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '',
-  downloadLimit: 0, // 0 = unlimited
+  downloadLimit: 0,
 };
 
 export function loadConfig(configPath: string = './config.json', options?: { skipExcelCheck?: boolean }): Config {
@@ -26,7 +26,6 @@ export function loadConfig(configPath: string = './config.json', options?: { ski
     const content = fs.readFileSync(configPath, 'utf-8');
     const config = JSON.parse(content);
 
-    // Validate required fields
     if (!config.apiKey) {
       console.error('Error: apiKey is required in config.json');
       process.exit(1);
@@ -43,7 +42,6 @@ export function loadConfig(configPath: string = './config.json', options?: { ski
     return {
       ...DEFAULT_CONFIG,
       ...config,
-      // Merge openai config with defaults
       openai: config.openai ? {
         apiKey: config.openai.apiKey,
         baseUrl: config.openai.baseUrl || 'https://api.openai.com/v1',
@@ -57,7 +55,6 @@ export function loadConfig(configPath: string = './config.json', options?: { ski
 }
 
 export function validateConfig(config: Config, options?: { skipExcelCheck?: boolean }): void {
-  // Check Excel file exists (skip in CLI mode)
   if (!options?.skipExcelCheck && config.excelFile) {
     if (!fs.existsSync(config.excelFile)) {
       console.error(`Error: Excel file not found at ${config.excelFile}`);
@@ -65,12 +62,10 @@ export function validateConfig(config: Config, options?: { skipExcelCheck?: bool
     }
   }
 
-  // Create download directory if not exists
   if (!fs.existsSync(config.downloadDir)) {
     fs.mkdirSync(config.downloadDir, { recursive: true });
   }
 
-  // Create logs directory if not exists
   if (!fs.existsSync('./logs')) {
     fs.mkdirSync('./logs', { recursive: true });
   }

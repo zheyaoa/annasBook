@@ -5,7 +5,6 @@ import { HttpClient } from './http-client.js';
 import { Searcher } from './searcher.js';
 import { Downloader } from './downloader.js';
 import { logger } from './logger.js';
-import { acquireLock, releaseLock } from './lock.js';
 import { BookInfo, SearchResult } from './types.js';
 
 const rl = readline.createInterface({
@@ -51,19 +50,11 @@ async function withRetry<T>(
 async function main(): Promise<void> {
   logger.info('Starting Anna\'s Archive Book Downloader');
 
-  // Load and validate config
   const config = loadConfig();
   validateConfig(config);
 
-  // Acquire lock
-  if (!acquireLock()) {
-    process.exit(1);
-  }
-
-  // Setup graceful shutdown
   const shutdown = () => {
     logger.info('Shutting down...');
-    releaseLock();
     rl.close();
     process.exit(0);
   };
@@ -71,13 +62,11 @@ async function main(): Promise<void> {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  // Initialize components
   const excelReader = new ExcelReader(config.excelFile);
   const httpClient = new HttpClient(config);
   const searcher = new Searcher(config, httpClient);
   const downloader = new Downloader(config, httpClient);
 
-  // Read books
   const books = excelReader.readBooks();
 
   let processed = 0;
@@ -90,7 +79,6 @@ async function main(): Promise<void> {
     logger.info(`Processing ${processed}/${books.length}: ${book.chineseTitle || book.englishTitle}`);
 
     try {
-      // Check if already processed successfully (downloaded or not found)
       const skipStatuses = ['已下载', '未找到'];
       if (skipStatuses.includes(book.downloadStatus)) {
         logger.info(`Skipping - status: ${book.downloadStatus}`);
@@ -98,7 +86,6 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // Search for book
       const results = await searcher.search(book);
       const searchTitle = book.language === 'en' ? book.englishTitle : book.chineseTitle;
       const searchAuthor = book.language === 'en' ? book.englishAuthor : book.chineseAuthor;
@@ -111,12 +98,10 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // Fetch book details (year, publisher) from detail page
       const details = await searcher.fetchBookDetails(searchResult.md5);
       searchResult.year = details.year;
       searchResult.publisher = details.publisher;
 
-      // Download with retry
       const result = await withRetry(
         () => downloader.download(book, searchResult!),
         config.maxRetries,
@@ -127,21 +112,24 @@ async function main(): Promise<void> {
         excelReader.updateStatus(book.rowIndex, '已下载', `https://annas-archive.gl/md5/${searchResult.md5}`);
         downloaded++;
 
-        // Check download limit
         if (config.downloadLimit && config.downloadLimit > 0 && downloaded >= config.downloadLimit) {
           logger.info(`Reached download limit: ${config.downloadLimit}`);
           excelReader.save();
           break;
         }
       } else {
-        excelReader.updateStatus(book.rowIndex, `下载失败: ${result.error}`);
-        failed++;
+        const isTimeout = result.error?.includes('timeout') || result.error?.includes('ETIMEDOUT');
+        if (isTimeout) {
+          logger.warn(`Download timeout, skipping: ${book.chineseTitle || book.englishTitle}`);
+          excelReader.updateStatus(book.rowIndex, '下载超时');
+        } else {
+          excelReader.updateStatus(book.rowIndex, `下载失败: ${result.error}`);
+          failed++;
+        }
       }
 
-      // Save Excel progress
       excelReader.save();
 
-      // Rate limiting
       await sleep(config.rateLimitMs);
 
     } catch (error) {
@@ -153,7 +141,6 @@ async function main(): Promise<void> {
         if (answer.toLowerCase() === 'quit') {
           break;
         }
-        // Reload cookies after user updates cookies.json
         httpClient.reloadCookies();
         continue;
       }
@@ -177,20 +164,16 @@ async function main(): Promise<void> {
     }
   }
 
-  // Final save
   excelReader.save();
 
-  // Summary
   logger.info('='.repeat(50));
   logger.info(`Completed: ${processed} processed, ${downloaded} downloaded, ${skipped} skipped, ${failed} failed`);
   logger.info('='.repeat(50));
 
-  releaseLock();
   rl.close();
 }
 
 main().catch(error => {
   logger.error(`Fatal error: ${error.message}`);
-  releaseLock();
   process.exit(1);
 });
