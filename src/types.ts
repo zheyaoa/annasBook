@@ -60,3 +60,18 @@ export interface ApiErrorResponse {
 export interface CookieData {
   [key: string]: string;
 }
+
+// Fast download API response
+export interface FastDownloadResponse {
+  download_url: string | null;
+  error?: string;
+  account_fast_download_info?: Record<string, unknown>;
+}
+
+// Result of trying fast download API
+export interface FastDownloadApiResult {
+  success: boolean;
+  downloadUrl?: string;
+  shouldFallback?: boolean;
+  error?: string;
+}
