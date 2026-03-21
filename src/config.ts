@@ -12,6 +12,7 @@ const DEFAULT_CONFIG: Config = {
   downloadTimeoutMs: 300000,
   maxRetries: 3,
   proxy: process.env.HTTPS_PROXY || process.env.HTTP_PROXY || '',
+  downloadLimit: 0, // 0 = unlimited
 };
 
 export function loadConfig(configPath: string = './config.json', options?: { skipExcelCheck?: boolean }): Config {
@@ -39,7 +40,16 @@ export function loadConfig(configPath: string = './config.json', options?: { ski
       process.exit(1);
     }
 
-    return { ...DEFAULT_CONFIG, ...config };
+    return {
+      ...DEFAULT_CONFIG,
+      ...config,
+      // Merge openai config with defaults
+      openai: config.openai ? {
+        apiKey: config.openai.apiKey,
+        baseUrl: config.openai.baseUrl || 'https://api.openai.com/v1',
+        model: config.openai.model || 'gpt-4o-mini',
+      } : undefined,
+    };
   } catch (error) {
     console.error(`Error parsing config.json: ${(error as Error).message}`);
     process.exit(1);

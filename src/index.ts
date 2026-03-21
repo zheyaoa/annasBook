@@ -98,36 +98,11 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // Determine search method
-      let searchResult: SearchResult | null = null;
-
-      if (book.bookLink) {
-        // Use existing MD5 from book link
-        const md5 = downloader.extractMd5FromUrl(book.bookLink);
-        if (md5) {
-          searchResult = {
-            md5,
-            title: book.chineseTitle || book.englishTitle,
-            author: book.chineseAuthor || book.englishAuthor,
-            format: 'pdf',
-            language: '',
-            size: '',
-            sizeBytes: 0,
-            year: '',
-            publisher: '',
-          };
-        } else {
-          logger.warn(`Invalid book link: ${book.bookLink}`);
-        }
-      }
-
-      // Search if no direct link
-      if (!searchResult) {
-        const results = await searcher.search(book);
-        const searchTitle = book.language === 'en' ? book.englishTitle : book.chineseTitle;
-        const searchAuthor = book.language === 'en' ? book.englishAuthor : book.chineseAuthor;
-        searchResult = searcher.selectBestResult(results, searchTitle, searchAuthor);
-      }
+      // Search for book
+      const results = await searcher.search(book);
+      const searchTitle = book.language === 'en' ? book.englishTitle : book.chineseTitle;
+      const searchAuthor = book.language === 'en' ? book.englishAuthor : book.chineseAuthor;
+      const searchResult = await searcher.selectBestResult(results, searchTitle, searchAuthor, book.language);
 
       if (!searchResult) {
         logger.warn(`Not found: ${book.chineseTitle || book.englishTitle}`);
@@ -151,6 +126,13 @@ async function main(): Promise<void> {
       if (result.success) {
         excelReader.updateStatus(book.rowIndex, '已下载', `https://annas-archive.gl/md5/${searchResult.md5}`);
         downloaded++;
+
+        // Check download limit
+        if (config.downloadLimit && config.downloadLimit > 0 && downloaded >= config.downloadLimit) {
+          logger.info(`Reached download limit: ${config.downloadLimit}`);
+          excelReader.save();
+          break;
+        }
       } else {
         excelReader.updateStatus(book.rowIndex, `下载失败: ${result.error}`);
         failed++;

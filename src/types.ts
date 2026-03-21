@@ -9,6 +9,13 @@ export interface Config {
   downloadTimeoutMs: number;
   maxRetries: number;
   proxy?: string; // Optional proxy URL, e.g., "http://127.0.0.1:7892"
+  downloadLimit?: number; // Maximum downloads per run, 0 or undefined = unlimited
+  openai?: {
+    enable?: boolean;    // Default: true if apiKey is set
+    apiKey: string;
+    baseUrl?: string;    // Default: https://api.openai.com/v1
+    model?: string;      // Default: gpt-4o-mini
+  };
 }
 
 // Book information from Excel

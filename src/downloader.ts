@@ -18,14 +18,26 @@ export class Downloader {
   }
 
   private generateFilename(book: BookInfo, result: SearchResult): string {
-    const chinese = (book.chineseTitle || '').replace(INVALID_CHARS_REGEX, '_').trim();
-    const english = (book.englishTitle || '').replace(INVALID_CHARS_REGEX, '_').trim();
-    const author = (book.englishAuthor || book.chineseAuthor || '').replace(INVALID_CHARS_REGEX, '_').trim();
+    // Determine titles based on language
+    let chineseTitle: string;
+    let englishTitle: string;
+
+    if (book.language === 'zh') {
+      // Search result is Chinese title
+      chineseTitle = (result.title || '').replace(INVALID_CHARS_REGEX, '_').trim();
+      englishTitle = (book.englishTitle || '').replace(INVALID_CHARS_REGEX, '_').trim();
+    } else {
+      // Search result is English title (default)
+      englishTitle = (result.title || '').replace(INVALID_CHARS_REGEX, '_').trim();
+      chineseTitle = (book.chineseTitle || '').replace(INVALID_CHARS_REGEX, '_').trim();
+    }
+
+    const author = (result.author || '').replace(INVALID_CHARS_REGEX, '_').trim();
     const year = result.year || '';
     const publisher = (result.publisher || '').replace(INVALID_CHARS_REGEX, '_').trim();
 
-    // Build filename, progressively truncate long parts
-    let parts = [chinese, english, author, year, publisher].filter(p => p);
+    // Build filename: {中文书名}_{英文书名}_{作者}_{年份}_{出版社}
+    let parts = [chineseTitle, englishTitle, author, year, publisher].filter(p => p);
     let filename = parts.join('_');
 
     // Limit length

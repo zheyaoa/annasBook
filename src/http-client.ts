@@ -135,13 +135,6 @@ export class HttpClient {
       const tempPath = `${destPath}.tmp`;
       fs.writeFileSync(tempPath, response.data);
 
-      // Verify size
-      const actualSize = fs.statSync(tempPath).size;
-      if (expectedSize > 0 && actualSize !== expectedSize) {
-        fs.unlinkSync(tempPath);
-        throw new Error(`Size mismatch: expected ${expectedSize}, got ${actualSize}`);
-      }
-
       // Rename to final path
       fs.renameSync(tempPath, destPath);
 

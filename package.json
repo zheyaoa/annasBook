@@ -5,7 +5,8 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "build": "tsc",
-    "search": "tsx scripts/cli-search.ts"
+    "search": "tsx scripts/cli-search.ts",
+    "download": "tsx scripts/cli-download.ts"
   },
   "keywords": [],
   "author": "",
