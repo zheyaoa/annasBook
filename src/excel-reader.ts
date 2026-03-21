@@ -151,6 +151,5 @@ export class ExcelReader {
 
   save(): void {
     XLSX.writeFile(this.workbook, this.filePath);
-    logger.info(`Excel file saved: ${this.filePath}`);
   }
 }

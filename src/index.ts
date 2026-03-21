@@ -81,7 +81,6 @@ async function main(): Promise<void> {
     try {
       const skipStatuses = ['已下载', '未找到'];
       if (skipStatuses.includes(book.downloadStatus)) {
-        logger.info(`Skipping - status: ${book.downloadStatus}`);
         skipped++;
         continue;
       }
@@ -92,7 +91,6 @@ async function main(): Promise<void> {
       const searchResult = await searcher.selectBestResult(results, searchTitle, searchAuthor, book.language);
 
       if (!searchResult) {
-        logger.warn(`Not found: ${book.chineseTitle || book.englishTitle}`);
         excelReader.updateStatus(book.rowIndex, '未找到');
         failed++;
         continue;
