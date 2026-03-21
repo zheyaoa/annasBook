@@ -117,24 +117,42 @@ export class Downloader {
   }
 
   async download(book: BookInfo, result: SearchResult): Promise<DownloadResult> {
-    // New API endpoint: fast_download/{md5}/0/0 (requires login cookies)
-    const url = `${this.config.baseUrl}/fast_download/${result.md5}/0/0`;
+    // Generate filename first
+    const filename = this.generateFilename(book, result);
+    const destPath = path.join(this.config.downloadDir, filename);
+
+    // Check if file already exists
+    if (fs.existsSync(destPath)) {
+      logger.info(`File already exists: ${filename}`);
+      this.consecutiveFailures = 0;
+      return { success: true, filePath: destPath };
+    }
+
+    logger.info(`Downloading: ${filename}`);
+
+    // Try JSON API first
+    const apiResult = await this.tryFastDownloadApi(result.md5);
+
+    let downloadUrl: string;
+    let usedFallback = false;
+
+    if (apiResult.success && apiResult.downloadUrl) {
+      // Use API download URL
+      downloadUrl = apiResult.downloadUrl;
+    } else if (apiResult.shouldFallback) {
+      // Fallback to cookies-based download
+      logger.info('[Download] Falling back to cookies-based download');
+      downloadUrl = `${this.config.baseUrl}/fast_download/${result.md5}/0/0`;
+      usedFallback = true;
+    } else {
+      // Non-recoverable error
+      this.consecutiveFailures++;
+      return { success: false, error: apiResult.error || 'Download failed' };
+    }
 
     try {
-      // Generate filename first
-      const filename = this.generateFilename(book, result);
-      const destPath = path.join(this.config.downloadDir, filename);
-
-      // Check if file already exists
-      if (fs.existsSync(destPath)) {
-        logger.info(`File already exists: ${filename}`);
-        this.consecutiveFailures = 0;
-        return { success: true, filePath: destPath };
-      }
-
-      // Download file directly (endpoint redirects to actual download URL)
-      logger.info(`Downloading: ${filename}`);
-      const finalUrl = await this.httpClient.download(url, destPath);
+      // Download file
+      const finalUrl = await this.httpClient.download(downloadUrl, destPath);
 
       // Verify the downloaded file is valid (not an HTML error page)
       const validationResult = this.validateDownloadedFile(destPath, result.format);
@@ -154,13 +172,13 @@ export class Downloader {
         }
         this.consecutiveFailures = 0;
         const actualSize = fs.statSync(newPath).size;
-        logger.info(`Downloaded: ${path.basename(newPath)} (${actualSize} bytes)`);
+        logger.info(`Downloaded: ${path.basename(newPath)} (${actualSize} bytes)${usedFallback ? ' [fallback]' : ''}`);
         return { success: true, filePath: newPath };
       }
 
       this.consecutiveFailures = 0;
       const actualSize = fs.statSync(destPath).size;
-      logger.info(`Downloaded: ${filename} (${actualSize} bytes)`);
+      logger.info(`Downloaded: ${filename} (${actualSize} bytes)${usedFallback ? ' [fallback]' : ''}`);
 
       return { success: true, filePath: destPath };
     } catch (error) {
