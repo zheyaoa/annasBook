@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Config, SearchResult, BookInfo, DownloadResult, FastDownloadResponse, FastDownloadApiResult, ApiErrorResponse } from './types.js';
+import { Config, SearchResult, BookInfo, DownloadResult, FastDownloadResponse, FastDownloadApiResult } from './types.js';
 import { HttpClient } from './http-client.js';
 import { logger } from './logger.js';
 
@@ -192,33 +192,6 @@ export class Downloader {
       }
 
       return { success: false, error: errorMsg };
-    }
-  }
-
-  private handleApiError(body: string, md5: string): DownloadResult {
-    try {
-      const data: ApiErrorResponse = JSON.parse(body);
-
-      switch (data.error) {
-        case 'invalid_md5':
-          return { success: false, error: 'Invalid MD5' };
-        case 'not_found':
-          return { success: false, error: 'Book not found' };
-        case 'invalid_key':
-          throw new Error('Invalid API key. Please check config.json.');
-        case 'rate_limit':
-          logger.warn('Rate limited. Waiting 60 seconds...');
-          throw new Error('RATE_LIMITED');
-        case 'membership_required':
-          return { success: false, error: 'Membership required' };
-        default:
-          return { success: false, error: data.error };
-      }
-    } catch (error) {
-      if ((error as Error).message.includes('Invalid API key')) {
-        throw error;
-      }
-      return { success: false, error: 'Unknown API error' };
     }
   }
 
