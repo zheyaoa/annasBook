@@ -4,6 +4,8 @@ import { HttpClient } from '../src/http-client.js';
 import { Searcher } from '../src/searcher.js';
 import { Downloader } from '../src/downloader.js';
 import { logger, setQuiet } from '../src/logger.js';
+import { FATAL_ERRORS } from '../src/types.js';
+import { sleep, withRetry } from '../src/utils.js';
 
 interface BatchArgs {
   excel?: string;
@@ -44,35 +46,6 @@ function parseArgs(): BatchArgs {
   }
 
   return result;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries: number,
-  backoff: number[]
-): Promise<T> {
-  let lastError: Error | null = null;
-
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error as Error;
-      if (i < maxRetries - 1) {
-        const delay = backoff[i] || backoff[backoff.length - 1];
-        if (!lastError.message.includes('CAPTCHA')) {
-          logger.warn(`Retry ${i + 1}/${maxRetries} after ${delay}ms`);
-        }
-        await sleep(delay);
-      }
-    }
-  }
-
-  throw lastError;
 }
 
 function printUsage(): void {
@@ -237,8 +210,7 @@ async function main(): Promise<void> {
       }
 
       // Fatal errors: stop immediately
-      const fatalErrors = ['CAPTCHA_DETECTED', 'CONSECUTIVE_FAILURES', 'NO_DOWNLOADS_LEFT'];
-      if (fatalErrors.includes(errorMsg)) {
+      if (FATAL_ERRORS.includes(errorMsg as any)) {
         excelReader.save();
 
         if (args.json) {

@@ -15,7 +15,7 @@ const DEFAULT_CONFIG: Config = {
   downloadLimit: 0,
 };
 
-export function loadConfig(configPath: string = './config.json', options?: { skipExcelCheck?: boolean }): Config {
+export function loadConfig(configPath: string = './config.json', options?: { skipExcelCheck?: boolean; excelFile?: string }): Config {
   if (!fs.existsSync(configPath)) {
     console.error(`Error: Config file not found at ${configPath}`);
     console.error('Please copy config.example.json to config.json and fill in your API key.');
@@ -34,7 +34,7 @@ export function loadConfig(configPath: string = './config.json', options?: { ski
       console.error('Error: baseUrl is required in config.json');
       process.exit(1);
     }
-    if (!config.excelFile && !options?.skipExcelCheck) {
+    if (!config.excelFile && !options?.excelFile && !options?.skipExcelCheck) {
       console.error('Error: excelFile is required in config.json');
       process.exit(1);
     }
@@ -42,6 +42,7 @@ export function loadConfig(configPath: string = './config.json', options?: { ski
     return {
       ...DEFAULT_CONFIG,
       ...config,
+      excelFile: options?.excelFile || config.excelFile,
       openai: config.openai ? {
         apiKey: config.openai.apiKey,
         baseUrl: config.openai.baseUrl || 'https://api.openai.com/v1',

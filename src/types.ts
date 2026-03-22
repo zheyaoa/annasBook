@@ -1,3 +1,11 @@
+export type ErrorCode =
+  | 'CAPTCHA_DETECTED'
+  | 'NO_DOWNLOADS_LEFT'
+  | 'RATE_LIMITED'
+  | 'CONSECUTIVE_FAILURES';
+
+export const FATAL_ERRORS: ErrorCode[] = ['CAPTCHA_DETECTED', 'CONSECUTIVE_FAILURES', 'NO_DOWNLOADS_LEFT'];
+
 export interface Config {
   apiKey: string;
   baseUrl: string;

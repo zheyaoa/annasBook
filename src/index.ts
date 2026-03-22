@@ -5,16 +5,13 @@ import { HttpClient } from './http-client.js';
 import { Searcher } from './searcher.js';
 import { Downloader } from './downloader.js';
 import { logger } from './logger.js';
-import { BookInfo, SearchResult } from './types.js';
+import { BookInfo, SearchResult, FATAL_ERRORS } from './types.js';
+import { sleep, withRetry } from './utils.js';
 
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
 });
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 async function promptUser(message: string): Promise<string> {
   return new Promise(resolve => {
@@ -22,29 +19,6 @@ async function promptUser(message: string): Promise<string> {
       resolve(answer.trim());
     });
   });
-}
-
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries: number,
-  backoff: number[]
-): Promise<T> {
-  let lastError: Error | null = null;
-
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error as Error;
-      if (i < maxRetries - 1) {
-        const delay = backoff[i] || backoff[backoff.length - 1];
-        logger.warn(`Retry ${i + 1}/${maxRetries} after ${delay}ms`);
-        await sleep(delay);
-      }
-    }
-  }
-
-  throw lastError;
 }
 
 async function main(): Promise<void> {
@@ -147,8 +121,7 @@ async function main(): Promise<void> {
       }
 
       // Fatal errors: stop immediately
-      const fatalErrors = ['CAPTCHA_DETECTED', 'CONSECUTIVE_FAILURES', 'NO_DOWNLOADS_LEFT'];
-      if (fatalErrors.includes(errorMsg)) {
+      if (FATAL_ERRORS.includes(errorMsg as any)) {
         logger.error(`Fatal error: ${errorMsg}. Stopping.`);
         break;
       }

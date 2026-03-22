@@ -3,12 +3,9 @@ import path from 'path';
 import { Config, SearchResult, BookInfo, DownloadResult, FastDownloadResponse, FastDownloadApiResult } from './types.js';
 import { HttpClient } from './http-client.js';
 import { logger } from './logger.js';
+import { sleep } from './utils.js';
 
 const INVALID_CHARS_REGEX = /[/\\:*?"<>|]/g;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 export class Downloader {
   private config: Config;
