@@ -11,11 +11,15 @@
   ],
   "scripts": {
     "start": "tsx src/index.ts",
-    "build": "tsc",
+    "clean": "node -e \"const fs=require('fs'); fs.rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc",
+    "build:watch": "tsc --watch",
+    "dev": "tsx src/cli.ts",
     "search": "tsx scripts/cli-search.ts",
     "download": "tsx scripts/cli-download.ts",
     "batch": "tsx scripts/cli-batch.ts",
-    "cli": "tsx src/cli.ts"
+    "cli": "tsx src/cli.ts",
+    "link": "npm run build && npm link"
   },
   "keywords": [],
   "author": "",
