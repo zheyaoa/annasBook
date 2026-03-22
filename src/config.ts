@@ -1,6 +1,52 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { Config } from './types.js';
+
+/**
+ * Get config file search paths in priority order
+ */
+function getConfigSearchPaths(): string[] {
+  const paths: string[] = [];
+
+  // 1. Environment variable
+  if (process.env.ANNASBOOK_CONFIG) {
+    paths.push(process.env.ANNASBOOK_CONFIG);
+  }
+
+  // 2. User home directory (default)
+  paths.push(path.join(os.homedir(), '.annasbook', 'config.json'));
+
+  // 3. Current directory (backward compatibility)
+  paths.push('./config.json');
+
+  return paths;
+}
+
+/**
+ * Find the first existing config file
+ */
+function findConfigFile(): string | null {
+  for (const p of getConfigSearchPaths()) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply environment variable overrides to config
+ */
+function applyEnvOverrides(config: Config): Config {
+  return {
+    ...config,
+    apiKey: process.env.ANNASBOOK_API_KEY || config.apiKey,
+    baseUrl: process.env.ANNASBOOK_BASE_URL || config.baseUrl,
+    downloadDir: process.env.ANNASBOOK_DOWNLOAD_DIR || config.downloadDir,
+    proxy: process.env.ANNASBOOK_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || config.proxy,
+  };
+}
 
 const DEFAULT_CONFIG: Config = {
   apiKey: '',
@@ -15,23 +61,32 @@ const DEFAULT_CONFIG: Config = {
   downloadLimit: 0,
 };
 
-export function loadConfig(configPath: string = './config.json', options?: { skipExcelCheck?: boolean; excelFile?: string }): Config {
-  if (!fs.existsSync(configPath)) {
-    console.error(`Error: Config file not found at ${configPath}`);
-    console.error('Please copy config.example.json to config.json and fill in your API key.');
+export function loadConfig(configPath?: string, options?: { skipExcelCheck?: boolean; excelFile?: string }): Config {
+  const finalPath = configPath || findConfigFile();
+
+  if (!finalPath) {
+    console.error('Error: No config file found.');
+    console.error('Searched paths:');
+    getConfigSearchPaths().forEach(p => {
+      const source = p === process.env.ANNASBOOK_CONFIG ? '$ANNASBOOK_CONFIG' :
+                     p.includes('.annasbook') ? '~/.annasbook/config.json' :
+                     './config.json';
+      console.error(`  - ${source} (not found)`);
+    });
+    console.error('\nRun: annas-download config init');
     process.exit(1);
   }
 
   try {
-    const content = fs.readFileSync(configPath, 'utf-8');
+    const content = fs.readFileSync(finalPath, 'utf-8');
     const config = JSON.parse(content);
 
-    if (!config.apiKey) {
-      console.error('Error: apiKey is required in config.json');
+    if (!config.apiKey && !process.env.ANNASBOOK_API_KEY) {
+      console.error('Error: apiKey is required in config.json or ANNASBOOK_API_KEY env var');
       process.exit(1);
     }
-    if (!config.baseUrl) {
-      console.error('Error: baseUrl is required in config.json');
+    if (!config.baseUrl && !process.env.ANNASBOOK_BASE_URL) {
+      console.error('Error: baseUrl is required in config.json or ANNASBOOK_BASE_URL env var');
       process.exit(1);
     }
     if (!config.excelFile && !options?.excelFile && !options?.skipExcelCheck) {
@@ -39,7 +94,7 @@ export function loadConfig(configPath: string = './config.json', options?: { ski
       process.exit(1);
     }
 
-    return {
+    const mergedConfig: Config = {
       ...DEFAULT_CONFIG,
       ...config,
       excelFile: options?.excelFile || config.excelFile,
@@ -49,8 +104,11 @@ export function loadConfig(configPath: string = './config.json', options?: { ski
         model: config.openai.model || 'gpt-4o-mini',
       } : undefined,
     };
+
+    // Apply environment variable overrides
+    return applyEnvOverrides(mergedConfig);
   } catch (error) {
-    console.error(`Error parsing config.json: ${(error as Error).message}`);
+    console.error(`Error parsing config file ${finalPath}: ${(error as Error).message}`);
     process.exit(1);
   }
 }
@@ -70,4 +128,18 @@ export function validateConfig(config: Config, options?: { skipExcelCheck?: bool
   if (!fs.existsSync('./logs')) {
     fs.mkdirSync('./logs', { recursive: true });
   }
+}
+
+/**
+ * Get the path where config file was found
+ */
+export function getConfigPath(configPath?: string): string | null {
+  return configPath || findConfigFile();
+}
+
+/**
+ * Get all config search paths
+ */
+export function getAllConfigPaths(): string[] {
+  return getConfigSearchPaths();
 }
