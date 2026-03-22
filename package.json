@@ -2,6 +2,13 @@
   "name": "annas-book-downloader",
   "version": "1.0.0",
   "type": "module",
+  "bin": {
+    "annas-download": "./bin/annas-download.js"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
   "scripts": {
     "start": "tsx src/index.ts",
     "build": "tsc",
