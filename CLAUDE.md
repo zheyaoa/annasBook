@@ -27,7 +27,12 @@ Create `config.json` in the project root with:
 - `baseUrl`: Base URL for Anna's Archive mirror
 - `excelFile`: Path to Excel file with book list (Excel mode only)
 - `downloadDir`: Directory for downloaded files
+- `rateLimitMs`: Delay between requests (default: 2000)
+- `requestTimeoutMs`: HTTP request timeout (default: 30000)
+- `downloadTimeoutMs`: Download timeout (default: 300000)
+- `maxRetries`: Max retry attempts (default: 3)
 - `proxy`: Optional proxy URL (also reads from `HTTPS_PROXY`/`HTTP_PROXY` env vars)
+- `downloadLimit`: Optional max downloads per run (0 or undefined = unlimited)
 - `openai`: Optional OpenAI config for LLM-assisted title matching when traditional matching fails:
   - `apiKey`: OpenAI API key
   - `baseUrl`: Optional, defaults to `https://api.openai.com/v1`
@@ -80,13 +85,18 @@ Required columns (Chinese headers):
 - `CAPTCHA_DETECTED`: Requires manual CAPTCHA solve and cookie update
 - `RATE_LIMITED`: 60-second wait
 - `CONSECUTIVE_FAILURES`: Stops after 5 consecutive failures
+- `NO_DOWNLOADS_LEFT`: Account has no downloads remaining, stops immediately
+
+### File Naming
+
+Downloaded files are saved as: `{中文书名} - {英文书名}.{扩展名}` (sanitized for filesystem compatibility)
 
 ## Development Notes
 
 - 任何修改都需要遵守 superpowers 的规范进行
 - TypeScript ES modules (`"type": "module"`) with `.js` import extensions required
 - Uses `tsx` for direct TypeScript execution
-- No test framework configured
+- No test framework configured - tests in `test/` are standalone scripts run via `tsx test/<name>.ts`
+- Test pattern: extend classes to expose private methods for testing (e.g., `TestSearcher extends Searcher`)
 - Log files written to `./logs/download-YYYY-MM-DD.log`
-- Test files should be placed in `test/` directory
 - Prefer Chinese responses when communicating with user
