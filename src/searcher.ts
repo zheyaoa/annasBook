@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { Config, BookInfo, SearchResult } from './types.js';
+import { Config, BookInfo, SearchResult, BookDetailsExtended } from './types.js';
 import { HttpClient } from './http-client.js';
 import { logger } from './logger.js';
 
@@ -499,6 +499,105 @@ Reply only the number of the best match, or "none" if no match.`;
     } catch (error) {
       logger.warn(`Failed to fetch book details for ${md5}: ${(error as Error).message}`);
       return { year: '', publisher: '' };
+    }
+  }
+
+  async fetchBookDetailsExtended(md5: string): Promise<BookDetailsExtended> {
+    const url = `${this.config.baseUrl}/md5/${md5}`;
+    try {
+      const { body } = await this.httpClient.get(url);
+      const $ = cheerio.load(body);
+
+      let title = '';
+      let author = '';
+      let format: 'pdf' | 'epub' = 'pdf';
+      let year = '';
+      let publisher = '';
+      let language = '';
+      let size = '';
+
+      // Extract title: usually in the first h1 or a specific element
+      const titleElement = $('h1').first();
+      if (titleElement.length) {
+        title = titleElement.text().trim();
+      }
+
+      // Extract author: look for link with author search
+      const authorLink = $('a.line-clamp-\\[2\\][href*="search?q="]').first();
+      if (authorLink.length) {
+        author = authorLink.text().trim();
+      }
+
+      // Extract format: look for PDF/EPUB in the page
+      const bodyText = $('body').text();
+      if (bodyText.includes('EPUB')) {
+        format = 'epub';
+      } else if (bodyText.includes('PDF')) {
+        format = 'pdf';
+      }
+
+      // Extract year
+      let foundYear = false;
+      $('*').each((_, el) => {
+        if (foundYear) return;
+        if ($(el).children().length === 0) {
+          const text = $(el).text().trim();
+          if (text === 'Year') {
+            const next = $(el).next();
+            if (next.length) {
+              year = next.text().trim();
+              foundYear = true;
+            }
+          }
+        }
+      });
+
+      // Extract language
+      $('*').each((_, el) => {
+        if (language) return;
+        if ($(el).children().length === 0) {
+          const text = $(el).text().trim();
+          if (text === 'Language') {
+            const next = $(el).next();
+            if (next.length) {
+              language = next.text().trim();
+            }
+          }
+        }
+      });
+
+      // Extract size: look for file size pattern
+      const sizeMatch = bodyText.match(/([\d.]+\s*(?:KB|MB|GB))/i);
+      if (sizeMatch) {
+        size = sizeMatch[1];
+      }
+
+      // Extract publisher (reuse existing logic)
+      if (authorLink.length) {
+        const parent = authorLink.parent();
+        const parentText = parent.text();
+        const lines = parentText.split('\n');
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i].trim();
+          if (line === author) {
+            const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+            if (nextLine && nextLine.includes(',') && nextLine.length > 10 &&
+                !nextLine.includes('http') && !nextLine.includes('function')) {
+              const parts = nextLine.split(',');
+              const possiblePublisher = parts[0].trim();
+              if (possiblePublisher.length > 3 && possiblePublisher.length < 60) {
+                publisher = possiblePublisher;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      return { title, author, format, year, publisher, language, size };
+    } catch (error) {
+      logger.warn(`Failed to fetch extended book details for ${md5}: ${(error as Error).message}`);
+      return { title: '', author: '', format: 'pdf', year: '', publisher: '', language: '', size: '' };
     }
   }
 }
