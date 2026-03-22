@@ -123,14 +123,11 @@ git commit -m "feat: add CLI entry point bin/annas-download.js"
 **Files:**
 - Modify: `src/config.ts`
 
-- [ ] **Step 1: 添加 os 模块导入和配置路径常量**
+- [ ] **Step 1: 添加 os 模块导入**
 
-在文件顶部添加：
+当前文件已有 `fs` 和 `path` 导入，只需添加 `os`：
 ```typescript
-import fs from 'fs';
-import path from 'path';
 import os from 'os';
-import { Config } from './types.js';
 ```
 
 - [ ] **Step 2: 定义配置查找路径函数**
@@ -196,9 +193,11 @@ function getConfigPathDescriptions(): string[] {
 }
 ```
 
-- [ ] **Step 3: 重构 loadConfig 函数**
+- [ ] **Step 3: 重构 loadConfig 函数（保留 validateConfig）**
 
-替换整个 loadConfig 函数为：
+**重要**：保留现有的 `validateConfig` 函数不变，只替换 `loadConfig` 函数。
+
+替换 loadConfig 函数为：
 ```typescript
 export function loadConfig(configPath?: string, options?: { skipExcelCheck?: boolean; excelFile?: string }): Config {
   const finalPath = configPath || findConfigFile();
@@ -272,12 +271,17 @@ export function getAllConfigPaths(): string[] {
 }
 ```
 
-- [ ] **Step 5: 验证 TypeScript 编译通过**
+- [ ] **Step 5: 验证所有导出函数存在**
+
+Run: `grep -E "^export" src/config.ts`
+Expected: 输出应包含 `loadConfig`, `validateConfig`, `getConfigPath`, `getAllConfigPaths`
+
+- [ ] **Step 6: 验证 TypeScript 编译通过**
 
 Run: `npx tsc --noEmit`
 Expected: 无错误输出
 
-- [ ] **Step 6: 提交**
+- [ ] **Step 7: 提交**
 
 ```bash
 git add src/config.ts
@@ -1063,9 +1067,10 @@ git commit -m "feat: add command modules (search, download, batch, config)"
 
 - [ ] **Step 1: 重写 cli.ts 为统一入口**
 
+**注意**：shebang 已在 `bin/annas-download.js` 中，TypeScript 源文件不需要。
+
 替换整个文件内容为：
 ```typescript
-#!/usr/bin/env node
 /**
  * annas-download - CLI for searching and downloading books from Anna's Archive
  *
