@@ -73,6 +73,10 @@ export class Downloader {
       const error = data.error || 'Unknown error';
       logger.error(`[API] API error: ${error}`);
 
+      if (error === 'No downloads left') {
+        throw new Error('NO_DOWNLOADS_LEFT');
+      }
+
       return { success: false, error };
     } catch (error) {
       const errorMsg = (error as Error).message;

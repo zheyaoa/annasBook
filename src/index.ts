@@ -140,27 +140,17 @@ async function main(): Promise<void> {
     } catch (error) {
       const errorMsg = (error as Error).message;
 
-      if (errorMsg === 'CAPTCHA_DETECTED') {
-        logger.warn('CAPTCHA detected. Please solve it and update cookies.json.');
-        const answer = await promptUser('Press Enter to continue or type "quit" to abort: ');
-        if (answer.toLowerCase() === 'quit') {
-          break;
-        }
-        httpClient.reloadCookies();
-        continue;
-      }
-
+      // RATE_LIMITED: wait 60s and continue
       if (errorMsg === 'RATE_LIMITED') {
         await sleep(60000);
         continue;
       }
 
-      if (errorMsg === 'CONSECUTIVE_FAILURES') {
-        const answer = await promptUser('Press Enter to continue or type "quit" to abort: ');
-        if (answer.toLowerCase() === 'quit') {
-          break;
-        }
-        continue;
+      // Fatal errors: stop immediately
+      const fatalErrors = ['CAPTCHA_DETECTED', 'CONSECUTIVE_FAILURES', 'NO_DOWNLOADS_LEFT'];
+      if (fatalErrors.includes(errorMsg)) {
+        logger.error(`Fatal error: ${errorMsg}. Stopping.`);
+        break;
       }
 
       logger.error(`Unexpected error: ${errorMsg}`);
