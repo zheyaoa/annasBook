@@ -80,8 +80,12 @@ export class Downloader {
       return { success: false, error };
     } catch (error) {
       const errorMsg = (error as Error).message;
-      logger.error(`[API] API request failed: ${errorMsg}`);
 
+      if (errorMsg === 'NO_DOWNLOADS_LEFT') {
+        throw error;  // Re-throw to propagate to main loop
+      }
+
+      logger.error(`[API] API request failed: ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
   }
