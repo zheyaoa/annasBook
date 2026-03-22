@@ -68,3 +68,13 @@ export interface FastDownloadApiResult {
   downloadUrl?: string;
   error?: string;
 }
+
+export interface BookDetailsExtended {
+  title: string;
+  author: string;
+  format: 'pdf' | 'epub';
+  year: string;
+  publisher: string;
+  language: string;
+  size: string;
+}
