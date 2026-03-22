@@ -16,8 +16,16 @@ npm start
 npm run search -- --title "Book Title" --author "Author Name"
 npm run search -- --title "Book Title" --format pdf --lang en
 
+# CLI download mode (search and download interactively, or by MD5)
+npm run download -- --title "Book Title" --author "Author"
+npm run download -- --md5 <md5_hash> --filename "Output Name"
+
 # Build TypeScript to JavaScript
 npm run build
+
+# Run standalone test scripts
+tsx test/test-match.ts      # Test search/matching logic
+tsx test/test-fast-download.ts  # Test fast download API
 ```
 
 ## Configuration
@@ -56,12 +64,17 @@ src/
 ├── types.ts        # TypeScript interfaces
 ├── logger.ts       # Console and file logging
 └── lock.ts         # Process lock to prevent concurrent instances
+
+scripts/
+├── cli-search.ts   # CLI search script (npm run search)
+└── cli-download.ts # CLI download script (npm run download)
 ```
 
 ### Data Flow
 
 1. **Excel Mode**: `ExcelReader` reads book list → `Searcher` searches for each book → `Downloader` downloads the best match → `ExcelReader` updates status in the same file
-2. **CLI Mode**: Arguments parsed → `Searcher` searches → `Downloader` downloads
+2. **CLI Search Mode**: Arguments parsed → `Searcher` searches → results displayed (no download)
+3. **CLI Download Mode**: Arguments parsed → `Searcher` searches (or uses MD5 directly) → user selects → `Downloader` downloads
 
 ### Key Classes
 
@@ -93,10 +106,15 @@ Downloaded files are saved as: `{中文书名} - {英文书名}.{扩展名}` (sa
 
 ## Development Notes
 
-- 任何修改都需要遵守 superpowers 的规范进行
 - TypeScript ES modules (`"type": "module"`) with `.js` import extensions required
 - Uses `tsx` for direct TypeScript execution
 - No test framework configured - tests in `test/` are standalone scripts run via `tsx test/<name>.ts`
 - Test pattern: extend classes to expose private methods for testing (e.g., `TestSearcher extends Searcher`)
 - Log files written to `./logs/download-YYYY-MM-DD.log`
 - Prefer Chinese responses when communicating with user
+
+## Key Dependencies
+
+- `axios`: HTTP client for API requests
+- `cheerio`: HTML parsing for search results
+- `xlsx`: Excel file reading/writing
