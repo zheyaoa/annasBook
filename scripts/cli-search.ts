@@ -3,14 +3,14 @@ import { HttpClient } from '../src/http-client.js';
 import { Searcher } from '../src/searcher.js';
 import { SearchResult } from '../src/types.js';
 
-interface SearchArgs {
+export interface SearchArgs {
   title?: string;
   author?: string;
   format?: 'pdf' | 'epub';
   lang?: 'en' | 'zh';
 }
 
-function parseArgs(): SearchArgs {
+export function parseArgs(): SearchArgs {
   const args = process.argv.slice(2);
   const result: SearchArgs = {};
 
@@ -43,21 +43,21 @@ function parseArgs(): SearchArgs {
   return result;
 }
 
-function buildQuery(args: SearchArgs): string {
+export function buildQuery(args: SearchArgs): string {
   const parts: string[] = [];
   if (args.title) parts.push(args.title);
   if (args.author) parts.push(args.author);
   return parts.join(' ');
 }
 
-function limitResults(results: SearchResult[]): SearchResult[] {
+export function limitResults(results: SearchResult[]): SearchResult[] {
   return results.slice(0, 5);
 }
 
-function formatResults(results: SearchResult[]): void {
+export function formatResults(results: SearchResult[]): SearchResult[] {
   if (results.length === 0) {
     console.log('No results found');
-    return;
+    return [];
   }
 
   // Display detailed cards
@@ -77,9 +77,11 @@ function formatResults(results: SearchResult[]): void {
   results.forEach(result => {
     console.log(result.md5);
   });
+
+  return results;
 }
 
-function printUsage(): void {
+export function printUsage(): void {
   console.log(`
 Usage: npm run search -- [options]
 
