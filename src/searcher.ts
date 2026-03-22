@@ -141,6 +141,115 @@ export class Searcher {
     throw new Error('CAPTCHA_DETECTED');
   }
 
+  private throwCaptchaError(url: string): never {
+    logger.warn('CAPTCHA detected!');
+    console.log('\n' + '='.repeat(60));
+    console.log('CAPTCHA detected. Please visit the URL in a browser:');
+    console.log(url);
+    console.log('Solve the CAPTCHA, then update cookies.json with new session cookies.');
+    console.log('Press Enter to continue (or type "quit" to abort)...');
+    console.log('='.repeat(60) + '\n');
+
+    throw new Error('CAPTCHA_DETECTED');
+  }
+
+  /**
+   * Extract year from book details page.
+   * Looks for leaf node with text "Year" and gets next sibling's text.
+   */
+  private extractYear($: cheerio.CheerioAPI): string {
+    let year = '';
+    let foundYear = false;
+    $('*').each((_, el) => {
+      if (foundYear) return;
+      if ($(el).children().length === 0) {
+        const text = $(el).text().trim();
+        if (text === 'Year') {
+          const next = $(el).next();
+          if (next.length) {
+            year = next.text().trim();
+            foundYear = true;
+          }
+        }
+      }
+    });
+    return year;
+  }
+
+  /**
+   * Extract publisher from book details page.
+   * Looks for publisher info in the text after author link.
+   */
+  private extractPublisher($: cheerio.CheerioAPI, author: string): string {
+    const authorLink = $('a.line-clamp-\\[2\\][href*="search?q="]').first();
+    if (!authorLink.length) return '';
+
+    const parent = authorLink.parent();
+    const parentText = parent.text();
+    const lines = parentText.split('\n');
+
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i].trim();
+      if (line === author) {
+        const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+        if (nextLine && nextLine.includes(',') && nextLine.length > 10 &&
+            !nextLine.includes('http') && !nextLine.includes('function')) {
+          const parts = nextLine.split(',');
+          const possiblePublisher = parts[0].trim();
+          if (possiblePublisher.length > 3 && possiblePublisher.length < 60) {
+            return possiblePublisher;
+          }
+        }
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Extract format (PDF/EPUB) from book details page.
+   * Looks for format in specific elements rather than scanning entire page text.
+   */
+  private extractFormat($: cheerio.CheerioAPI): 'pdf' | 'epub' {
+    // Look for format in elements that typically contain file info
+    // Try specific selectors first, then fall back to more general ones
+    const formatSelectors = [
+      '[class*="file-format"]',
+      '[class*="format"]',
+      '.text-lg.font-bold',
+      'span.font-mono',
+    ];
+
+    for (const selector of formatSelectors) {
+      const elements = $(selector);
+      for (let i = 0; i < elements.length; i++) {
+        const text = $(elements[i]).text().trim().toUpperCase();
+        if (text === 'EPUB') return 'epub';
+        if (text === 'PDF') return 'pdf';
+      }
+    }
+
+    // Fall back to looking for format text in structured metadata sections
+    // Look for patterns like "PDF" or "EPUB" in smaller text sections
+    let format: 'pdf' | 'epub' = 'pdf';
+    $('div, span, p').each((_, el) => {
+      const text = $(el).text().trim();
+      // Only check short text snippets to avoid false positives
+      if (text.length < 20) {
+        const upperText = text.toUpperCase();
+        if (upperText === 'EPUB') {
+          format = 'epub';
+          return false; // break each loop
+        }
+        if (upperText === 'PDF') {
+          format = 'pdf';
+          return false; // break each loop
+        }
+      }
+    });
+
+    return format;
+  }
+
   private parseSearchResults(html: string, searchTitle: string): SearchResult[] {
     const $ = cheerio.load(html);
     const results: SearchResult[] = [];
@@ -443,60 +552,28 @@ Reply only the number of the best match, or "none" if no match.`;
   async fetchBookDetails(md5: string): Promise<{ year: string; publisher: string }> {
     const url = `${this.config.baseUrl}/md5/${md5}`;
     try {
-      const { body } = await this.httpClient.get(url);
+      const { status, body } = await this.httpClient.get(url);
+
+      // Check for CAPTCHA
+      if (this.httpClient.isCaptchaResponse(body, status)) {
+        this.throwCaptchaError(url);
+      }
+
       const $ = cheerio.load(body);
 
-      let year = '';
-      let publisher = '';
-
-      // Find year: look for leaf node with text "Year" and get next sibling's text
-      // Note: There may be multiple Year fields on the page (e.g., original pub date, edition date)
-      // We take the first one as it's typically the original publication year
-      let foundYear = false;
-      $('*').each((_, el) => {
-        if (foundYear) return; // Stop after finding first match
-        if ($(el).children().length === 0) {
-          const text = $(el).text().trim();
-          if (text === 'Year') {
-            const next = $(el).next();
-            if (next.length) {
-              year = next.text().trim();
-              foundYear = true;
-            }
-          }
-        }
-      });
-
-      // Find publisher: look in the text after author link
-      // The author link has class containing "line-clamp" and text is the author name
+      // Extract author first (needed for publisher extraction)
       const authorLink = $('a.line-clamp-\\[2\\][href*="search?q="]').first();
-      if (authorLink.length) {
-        const parent = authorLink.parent();
-        const parentText = parent.text();
+      const author = authorLink.length ? authorLink.text().trim() : '';
 
-        // Find the line after author name that contains publisher
-        const lines = parentText.split('\n');
-        for (let i = 0; i < lines.length - 1; i++) {
-          const line = lines[i].trim();
-          // Check if this is the author line (matches the link text)
-          if (line === authorLink.text().trim()) {
-            const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
-            // Publisher line contains comma and looks like metadata
-            if (nextLine && nextLine.includes(',') && nextLine.length > 10 &&
-                !nextLine.includes('http') && !nextLine.includes('function')) {
-              const parts = nextLine.split(',');
-              const possiblePublisher = parts[0].trim();
-              if (possiblePublisher.length > 3 && possiblePublisher.length < 60) {
-                publisher = possiblePublisher;
-                break;
-              }
-            }
-          }
-        }
-      }
+      // Use helper methods for extraction
+      const year = this.extractYear($);
+      const publisher = this.extractPublisher($, author);
 
       return { year, publisher };
     } catch (error) {
+      if ((error as Error).message === 'CAPTCHA_DETECTED') {
+        throw error;
+      }
       logger.warn(`Failed to fetch book details for ${md5}: ${(error as Error).message}`);
       return { year: '', publisher: '' };
     }
@@ -505,54 +582,32 @@ Reply only the number of the best match, or "none" if no match.`;
   async fetchBookDetailsExtended(md5: string): Promise<BookDetailsExtended> {
     const url = `${this.config.baseUrl}/md5/${md5}`;
     try {
-      const { body } = await this.httpClient.get(url);
-      const $ = cheerio.load(body);
+      const { status, body } = await this.httpClient.get(url);
 
-      let title = '';
-      let author = '';
-      let format: 'pdf' | 'epub' = 'pdf';
-      let year = '';
-      let publisher = '';
-      let language = '';
-      let size = '';
+      // Check for CAPTCHA
+      if (this.httpClient.isCaptchaResponse(body, status)) {
+        this.throwCaptchaError(url);
+      }
+
+      const $ = cheerio.load(body);
 
       // Extract title: usually in the first h1 or a specific element
       const titleElement = $('h1').first();
-      if (titleElement.length) {
-        title = titleElement.text().trim();
-      }
+      const title = titleElement.length ? titleElement.text().trim() : '';
 
       // Extract author: look for link with author search
       const authorLink = $('a.line-clamp-\\[2\\][href*="search?q="]').first();
-      if (authorLink.length) {
-        author = authorLink.text().trim();
-      }
+      const author = authorLink.length ? authorLink.text().trim() : '';
 
-      // Extract format: look for PDF/EPUB in the page
-      const bodyText = $('body').text();
-      if (bodyText.includes('EPUB')) {
-        format = 'epub';
-      } else if (bodyText.includes('PDF')) {
-        format = 'pdf';
-      }
+      // Extract format using improved specific element lookup
+      const format = this.extractFormat($);
 
-      // Extract year
-      let foundYear = false;
-      $('*').each((_, el) => {
-        if (foundYear) return;
-        if ($(el).children().length === 0) {
-          const text = $(el).text().trim();
-          if (text === 'Year') {
-            const next = $(el).next();
-            if (next.length) {
-              year = next.text().trim();
-              foundYear = true;
-            }
-          }
-        }
-      });
+      // Use helper methods for year and publisher extraction
+      const year = this.extractYear($);
+      const publisher = this.extractPublisher($, author);
 
       // Extract language
+      let language = '';
       $('*').each((_, el) => {
         if (language) return;
         if ($(el).children().length === 0) {
@@ -566,36 +621,30 @@ Reply only the number of the best match, or "none" if no match.`;
         }
       });
 
-      // Extract size: look for file size pattern
-      const sizeMatch = bodyText.match(/([\d.]+\s*(?:KB|MB|GB))/i);
-      if (sizeMatch) {
-        size = sizeMatch[1];
-      }
-
-      // Extract publisher (reuse existing logic)
-      if (authorLink.length) {
-        const parent = authorLink.parent();
-        const parentText = parent.text();
-        const lines = parentText.split('\n');
-        for (let i = 0; i < lines.length - 1; i++) {
-          const line = lines[i].trim();
-          if (line === author) {
-            const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
-            if (nextLine && nextLine.includes(',') && nextLine.length > 10 &&
-                !nextLine.includes('http') && !nextLine.includes('function')) {
-              const parts = nextLine.split(',');
-              const possiblePublisher = parts[0].trim();
-              if (possiblePublisher.length > 3 && possiblePublisher.length < 60) {
-                publisher = possiblePublisher;
-                break;
-              }
-            }
-          }
+      // Extract size: look for file size pattern in specific metadata sections
+      let size = '';
+      $('div, span').each((_, el) => {
+        if (size) return;
+        const text = $(el).text().trim();
+        const sizeMatch = text.match(/^([\d.]+\s*(?:KB|MB|GB))$/i);
+        if (sizeMatch) {
+          size = sizeMatch[1];
+        }
+      });
+      // Fallback: search in broader text if not found in specific elements
+      if (!size) {
+        const bodyText = $('body').text();
+        const sizeMatch = bodyText.match(/([\d.]+\s*(?:KB|MB|GB))/i);
+        if (sizeMatch) {
+          size = sizeMatch[1];
         }
       }
 
       return { title, author, format, year, publisher, language, size };
     } catch (error) {
+      if ((error as Error).message === 'CAPTCHA_DETECTED') {
+        throw error;
+      }
       logger.warn(`Failed to fetch extended book details for ${md5}: ${(error as Error).message}`);
       return { title: '', author: '', format: 'pdf', year: '', publisher: '', language: '', size: '' };
     }
