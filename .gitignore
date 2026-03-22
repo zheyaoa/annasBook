@@ -8,5 +8,5 @@ cookies.json
 *.log
 test
 src/assets/
-docs/
+docs/superpowers/workspace/
 skills/*
