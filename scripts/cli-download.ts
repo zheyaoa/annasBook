@@ -4,6 +4,7 @@ import { HttpClient } from '../src/http-client.js';
 import { Searcher } from '../src/searcher.js';
 import { Downloader } from '../src/downloader.js';
 import { SearchResult, BookInfo, BookDetailsExtended } from '../src/types.js';
+import { setQuiet } from '../src/logger.js';
 import {
   buildQuery,
   limitResults,
@@ -23,6 +24,8 @@ interface DownloadArgs {
   author?: string;
   format?: 'pdf' | 'epub';
   lang?: 'en' | 'zh';
+  json?: boolean;
+  output?: string;
 }
 
 function parseDownloadArgs(): DownloadArgs {
@@ -53,6 +56,11 @@ function parseDownloadArgs(): DownloadArgs {
       if (lang === 'en' || lang === 'zh') {
         result.lang = lang;
       }
+      i++;
+    } else if (args[i] === '--json') {
+      result.json = true;
+    } else if (args[i] === '--output' && args[i + 1]) {
+      result.output = args[i + 1];
       i++;
     }
   }
@@ -115,23 +123,38 @@ function buildSearchResult(details: BookDetailsExtended, md5: string): SearchRes
 async function downloadByMd5(
   md5: string,
   filename: string | undefined,
+  outputDir: string | undefined,
   searcher: Searcher,
-  downloader: Downloader
+  downloader: Downloader,
+  json: boolean = false
 ): Promise<void> {
-  console.log(`Fetching book details for MD5: ${md5}...`);
+  if (!json) {
+    console.log(`Fetching book details for MD5: ${md5}...`);
+  }
 
   const details = await searcher.fetchBookDetailsExtended(md5);
 
   if (!details.title) {
-    console.error('Error: Could not fetch book details. Invalid MD5?');
-    rl.close();
+    if (json) {
+      console.log(JSON.stringify({
+        success: false,
+        error: 'INVALID_MD5',
+        message: 'Could not fetch book details. Invalid MD5?',
+        md5
+      }));
+    } else {
+      console.error('Error: Could not fetch book details. Invalid MD5?');
+    }
     process.exit(1);
   }
 
-  console.log(`\nTitle: ${details.title}`);
-  console.log(`Author: ${details.author || 'Unknown'}`);
-  console.log(`Format: ${details.format.toUpperCase()}`);
-  console.log(`Size: ${details.size || 'Unknown'}`);
+  if (!json) {
+    console.log(`\nTitle: ${details.title}`);
+    console.log(`Author: ${details.author || 'Unknown'}`);
+    console.log(`Format: ${details.format.toUpperCase()}`);
+    console.log(`Size: ${details.size || 'Unknown'}`);
+    console.log('\nStarting download...');
+  }
 
   const bookInfo = buildBookInfo(details);
   const searchResult = buildSearchResult(details, md5);
@@ -141,14 +164,29 @@ async function downloadByMd5(
     searchResult.title = filename;
   }
 
-  console.log('\nStarting download...');
   const result = await downloader.download(bookInfo, searchResult);
 
   if (result.success) {
-    console.log(`\nDownload successful: ${result.filePath}`);
+    if (json) {
+      console.log(JSON.stringify({
+        success: true,
+        filePath: result.filePath,
+        md5
+      }, null, 2));
+    } else {
+      console.log(`\nDownload successful: ${result.filePath}`);
+    }
   } else {
-    console.error(`\nDownload failed: ${result.error}`);
-    rl.close();
+    if (json) {
+      console.log(JSON.stringify({
+        success: false,
+        error: 'DOWNLOAD_FAILED',
+        message: result.error,
+        md5
+      }));
+    } else {
+      console.error(`\nDownload failed: ${result.error}`);
+    }
     process.exit(1);
   }
 }
@@ -168,21 +206,41 @@ async function downloadBySearch(
   const query = buildQuery(searchArgs);
 
   if (!query) {
-    console.error('Error: At least one of --title or --author is required\n');
-    printDownloadUsage();
-    rl.close();
+    if (args.json) {
+      console.log(JSON.stringify({
+        success: false,
+        error: 'MISSING_ARGS',
+        message: 'At least one of --title or --author is required'
+      }));
+    } else {
+      console.error('Error: At least one of --title or --author is required\n');
+      printDownloadUsage();
+    }
     process.exit(1);
   }
 
-  console.log(`Searching for: ${query}`);
+  if (!args.json) {
+    console.log(`Searching for: ${query}`);
+  }
 
   try {
     const results = await searcher.searchByQuery(query, args.format);
-    const limitedResults = limitResults(results);
-    formatResults(limitedResults);
+    const limitedResults = limitResults(results, 5);
+
+    if (args.json) {
+      // JSON 模式：返回搜索结果，让调用者选择
+      console.log(JSON.stringify({
+        success: true,
+        results: limitedResults,
+        count: limitedResults.length,
+        message: limitedResults.length === 0 ? 'No results found' : undefined
+      }, null, 2));
+      return;
+    }
+
+    formatResults(limitedResults, false);
 
     if (limitedResults.length === 0) {
-      rl.close();
       process.exit(0);
     }
 
@@ -190,7 +248,6 @@ async function downloadBySearch(
 
     if (!selected) {
       console.log('Download cancelled.');
-      rl.close();
       process.exit(0);
     }
 
@@ -220,21 +277,27 @@ async function downloadBySearch(
       console.log(`\nDownload successful: ${result.filePath}`);
     } else {
       console.error(`\nDownload failed: ${result.error}`);
-      rl.close();
       process.exit(1);
     }
 
   } catch (error) {
     const errorMsg = (error as Error).message;
 
+    if (args.json) {
+      console.log(JSON.stringify({
+        success: false,
+        error: errorMsg === 'CAPTCHA_DETECTED' ? 'CAPTCHA_DETECTED' : 'SEARCH_ERROR',
+        message: errorMsg
+      }));
+      process.exit(errorMsg === 'CAPTCHA_DETECTED' ? 2 : 1);
+    }
+
     if (errorMsg === 'CAPTCHA_DETECTED') {
       console.error('\nCAPTCHA detected. Please visit the search URL in a browser, solve it, and update cookies.json.');
-      rl.close();
-      process.exit(1);
+      process.exit(2);
     }
 
     console.error(`Error: ${errorMsg}`);
-    rl.close();
     process.exit(1);
   }
 }
@@ -246,16 +309,19 @@ Usage: npm run download -- [options]
 Options:
   --md5 <string>       Book MD5 hash (use instead of search)
   --filename <string>  Output filename without extension (MD5 mode only)
+  --output <dir>       Output directory (default: from config)
   --title <string>     Book title keywords (for search)
   --author <string>    Author name
   --format <format>    Filter by format: pdf or epub
   --lang <lang>        Language preference: en or zh
+  --json               Output results as JSON (requires --md5 for download)
 
 Either --md5 OR --title is required.
 
 Examples:
   npm run download -- --md5 a1b2c3d4e5f6...
   npm run download -- --md5 a1b2c3d4e5f6... --filename "My Book"
+  npm run download -- --md5 a1b2c3d4e5f6... --json
   npm run download -- --title "The Great Gatsby"
   npm run download -- --title "1984" --author "Orwell" --format pdf
 `);
@@ -264,16 +330,40 @@ Examples:
 async function main(): Promise<void> {
   const args = parseDownloadArgs();
 
+  // Enable quiet mode for JSON output
+  if (args.json) {
+    setQuiet(true);
+  }
+
   // Validate: need either md5 or title
   if (!args.md5 && !args.title) {
-    console.error('Error: Either --md5 or --title is required\n');
-    printDownloadUsage();
+    if (args.json) {
+      console.log(JSON.stringify({
+        success: false,
+        error: 'MISSING_ARGS',
+        message: 'Either --md5 or --title is required'
+      }));
+    } else {
+      console.error('Error: Either --md5 or --title is required\n');
+      printDownloadUsage();
+    }
     process.exit(1);
+  }
+
+  // JSON mode requires md5 for actual download
+  if (args.json && !args.md5) {
+    // In JSON mode with title, just return search results
+    // This allows skill to search first, then download with md5
   }
 
   // Load config
   const config = loadConfig('./config.json', { skipExcelCheck: true });
   validateConfig(config, { skipExcelCheck: true });
+
+  // Override download dir if specified
+  if (args.output) {
+    config.downloadDir = args.output;
+  }
 
   // Initialize components
   const httpClient = new HttpClient(config);
@@ -282,25 +372,34 @@ async function main(): Promise<void> {
 
   try {
     if (args.md5) {
-      await downloadByMd5(args.md5, args.filename, searcher, downloader);
+      await downloadByMd5(args.md5, args.filename, args.output, searcher, downloader, args.json);
     } else {
       await downloadBySearch(args, searcher, downloader);
     }
   } catch (error) {
     const errorMsg = (error as Error).message;
 
+    if (args.json) {
+      console.log(JSON.stringify({
+        success: false,
+        error: errorMsg === 'NO_DOWNLOADS_LEFT' ? 'NO_DOWNLOADS_LEFT' : 'UNEXPECTED_ERROR',
+        message: errorMsg
+      }));
+      process.exit(errorMsg === 'NO_DOWNLOADS_LEFT' ? 3 : 1);
+    }
+
     if (errorMsg === 'NO_DOWNLOADS_LEFT') {
       console.error('\nError: No downloads left on this account.');
-      rl.close();
-      process.exit(1);
+      process.exit(3);
     }
 
     console.error(`\nUnexpected error: ${errorMsg}`);
-    rl.close();
     process.exit(1);
   }
 
-  rl.close();
+  if (!args.json) {
+    rl.close();
+  }
 }
 
 main();

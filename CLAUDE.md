@@ -10,22 +10,31 @@ Anna's Archive Book Downloader - A TypeScript tool to search and download books 
 
 ```bash
 # Run in Excel batch mode (default)
-npm start
+npx tsx /Users/yuyuxin/code/annasBook/src/index.ts
 
 # CLI search mode (no download, just search and display results)
-npm run search -- --title "Book Title" --author "Author Name"
-npm run search -- --title "Book Title" --format pdf --lang en
+npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-search.ts --title "Book Title" --author "Author Name"
+npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-search.ts --title "Book Title" --format pdf --lang en
 
 # CLI download mode (search and download interactively, or by MD5)
-npm run download -- --title "Book Title" --author "Author"
-npm run download -- --md5 <md5_hash> --filename "Output Name"
+npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-download.ts --title "Book Title" --author "Author"
+npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-download.ts --md5 <md5_hash> --filename "Output Name"
+
+# CLI batch mode (batch download from Excel, with JSON output support)
+npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-batch.ts --excel ./books.xlsx
+npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-batch.ts --excel ./books.xlsx --output ./downloads --limit 5 --json
+
+# Unified CLI entry point (delegates to subcommands)
+npx tsx /Users/yuyuxin/code/annasBook/src/cli.ts search --title "Book Title" --json
+npx tsx /Users/yuyuxin/code/annasBook/src/cli.ts download --md5 <md5> --output ./downloads
+npx tsx /Users/yuyuxin/code/annasBook/src/cli.ts batch --excel ./books.xlsx --json
 
 # Build TypeScript to JavaScript
 npm run build
 
 # Run standalone test scripts
-tsx test/test-match.ts      # Test search/matching logic
-tsx test/test-fast-download.ts  # Test fast download API
+npx tsx /Users/yuyuxin/code/annasBook/test/test-match.ts
+npx tsx /Users/yuyuxin/code/annasBook/test/test-fast-download.ts
 ```
 
 ## Configuration
@@ -56,6 +65,7 @@ Authentication requires a `cookies.json` file in the project root. The file can 
 ```
 src/
 ├── index.ts        # Entry point with CLI parsing and main loop
+├── cli.ts          # Unified CLI entry point (delegates to scripts/)
 ├── searcher.ts     # Search Anna's Archive, parse results, select best match
 ├── downloader.ts   # Download books via fast_download API endpoint
 ├── http-client.ts  # HTTP wrapper with cookies, proxy, CAPTCHA detection
@@ -67,7 +77,8 @@ src/
 
 scripts/
 ├── cli-search.ts   # CLI search script (npm run search)
-└── cli-download.ts # CLI download script (npm run download)
+├── cli-download.ts # CLI download script (npm run download)
+└── cli-batch.ts    # CLI batch script (npm run batch) with JSON output
 ```
 
 ### Data Flow
@@ -75,6 +86,7 @@ scripts/
 1. **Excel Mode**: `ExcelReader` reads book list → `Searcher` searches for each book → `Downloader` downloads the best match → `ExcelReader` updates status in the same file
 2. **CLI Search Mode**: Arguments parsed → `Searcher` searches → results displayed (no download)
 3. **CLI Download Mode**: Arguments parsed → `Searcher` searches (or uses MD5 directly) → user selects → `Downloader` downloads
+4. **CLI Batch Mode**: Excel file parsed → iterate books → search/download each → JSON output for programmatic use
 
 ### Key Classes
 

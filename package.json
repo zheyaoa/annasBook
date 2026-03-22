@@ -6,7 +6,9 @@
     "start": "tsx src/index.ts",
     "build": "tsc",
     "search": "tsx scripts/cli-search.ts",
-    "download": "tsx scripts/cli-download.ts"
+    "download": "tsx scripts/cli-download.ts",
+    "batch": "tsx scripts/cli-batch.ts",
+    "cli": "tsx src/cli.ts"
   },
   "keywords": [],
   "author": "",

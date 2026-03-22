@@ -2,12 +2,15 @@ import { loadConfig, validateConfig } from '../src/config.js';
 import { HttpClient } from '../src/http-client.js';
 import { Searcher } from '../src/searcher.js';
 import { SearchResult } from '../src/types.js';
+import { setQuiet } from '../src/logger.js';
 
 export interface SearchArgs {
   title?: string;
   author?: string;
   format?: 'pdf' | 'epub';
   lang?: 'en' | 'zh';
+  json?: boolean;
+  limit?: number;
 }
 
 export function parseArgs(): SearchArgs {
@@ -24,7 +27,9 @@ export function parseArgs(): SearchArgs {
     } else if (args[i] === '--format' && args[i + 1]) {
       const format = args[i + 1].toLowerCase();
       if (format !== 'pdf' && format !== 'epub') {
-        console.error("Invalid format. Use 'pdf' or 'epub'");
+        if (!result.json) {
+          console.error("Invalid format. Use 'pdf' or 'epub'");
+        }
         process.exit(1);
       }
       result.format = format;
@@ -32,10 +37,20 @@ export function parseArgs(): SearchArgs {
     } else if (args[i] === '--lang' && args[i + 1]) {
       const lang = args[i + 1].toLowerCase();
       if (lang !== 'en' && lang !== 'zh') {
-        console.error("Invalid lang. Use 'en' or 'zh'");
+        if (!result.json) {
+          console.error("Invalid lang. Use 'en' or 'zh'");
+        }
         process.exit(1);
       }
       result.lang = lang;
+      i++;
+    } else if (args[i] === '--json') {
+      result.json = true;
+    } else if (args[i] === '--limit' && args[i + 1]) {
+      const limit = parseInt(args[i + 1]);
+      if (!isNaN(limit) && limit > 0) {
+        result.limit = limit;
+      }
       i++;
     }
   }
@@ -50,11 +65,20 @@ export function buildQuery(args: SearchArgs): string {
   return parts.join(' ');
 }
 
-export function limitResults(results: SearchResult[]): SearchResult[] {
-  return results.slice(0, 5);
+export function limitResults(results: SearchResult[], limit?: number): SearchResult[] {
+  return results.slice(0, limit || 5);
 }
 
-export function formatResults(results: SearchResult[]): SearchResult[] {
+export function formatResults(results: SearchResult[], json: boolean = false): SearchResult[] {
+  if (json) {
+    console.log(JSON.stringify({
+      success: true,
+      results: results,
+      count: results.length
+    }, null, 2));
+    return results;
+  }
+
   if (results.length === 0) {
     console.log('No results found');
     return [];
@@ -90,23 +114,38 @@ Options:
   --author <string>  Author name
   --format <format>  Filter by format: pdf or epub (default: both)
   --lang <lang>      Language preference: en or zh (default: en)
+  --limit <number>   Max results to return (default: 5)
+  --json             Output results as JSON
 
 At least one of --title or --author is required.
 
 Examples:
   npm run search -- --title "The Great Gatsby"
   npm run search -- --title "1984" --author "Orwell"
-  npm run search -- --title "Dune" --format epub
+  npm run search -- --title "Dune" --format epub --json
 `);
 }
 
 async function main(): Promise<void> {
   const args = parseArgs();
 
+  // Enable quiet mode for JSON output
+  if (args.json) {
+    setQuiet(true);
+  }
+
   // Validate at least one search term
   if (!args.title && !args.author) {
-    console.error('Error: At least one of --title or --author is required\n');
-    printUsage();
+    if (args.json) {
+      console.log(JSON.stringify({
+        success: false,
+        error: 'MISSING_ARGS',
+        message: 'At least one of --title or --author is required'
+      }));
+    } else {
+      console.error('Error: At least one of --title or --author is required\n');
+      printUsage();
+    }
     process.exit(1);
   }
 
@@ -123,17 +162,25 @@ async function main(): Promise<void> {
 
   try {
     const results = await searcher.searchByQuery(query, args.format);
-    const limitedResults = limitResults(results);
-    formatResults(limitedResults);
+    const limitedResults = limitResults(results, args.limit);
+    formatResults(limitedResults, args.json);
 
-    // Exit with appropriate code
     process.exit(0);
   } catch (error) {
     const errorMsg = (error as Error).message;
 
+    if (args.json) {
+      console.log(JSON.stringify({
+        success: false,
+        error: errorMsg === 'CAPTCHA_DETECTED' ? 'CAPTCHA_DETECTED' : 'SEARCH_ERROR',
+        message: errorMsg
+      }));
+      process.exit(errorMsg === 'CAPTCHA_DETECTED' ? 2 : 1);
+    }
+
     if (errorMsg === 'CAPTCHA_DETECTED') {
       console.error('\nCAPTCHA detected. Please visit the search URL in a browser, solve it, and update cookies.json.');
-      process.exit(1);
+      process.exit(2);
     }
 
     console.error(`Error: ${errorMsg}`);

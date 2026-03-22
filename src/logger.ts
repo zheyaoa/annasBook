@@ -10,6 +10,12 @@ const COLORS = {
   RESET: '\x1b[0m',
 };
 
+let quietMode = false;
+
+export function setQuiet(quiet: boolean): void {
+  quietMode = quiet;
+}
+
 function getLogFilePath(): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -33,14 +39,17 @@ function log(level: LogLevel, message: string): void {
   const timestamp = formatTimestamp();
   const logLine = `[${timestamp}] [${level}] ${message}`;
 
-  const color = COLORS[level];
-  const coloredLogLine = `${color}${logLine}${COLORS.RESET}`;
-  if (level === 'ERROR') {
-    console.error(coloredLogLine);
-  } else if (level === 'WARN') {
-    console.warn(coloredLogLine);
-  } else {
-    console.log(coloredLogLine);
+  // Only output to console if not in quiet mode
+  if (!quietMode) {
+    const color = COLORS[level];
+    const coloredLogLine = `${color}${logLine}${COLORS.RESET}`;
+    if (level === 'ERROR') {
+      console.error(coloredLogLine);
+    } else if (level === 'WARN') {
+      console.warn(coloredLogLine);
+    } else {
+      console.log(coloredLogLine);
+    }
   }
 
   const logFile = getLogFilePath();
@@ -51,7 +60,9 @@ function log(level: LogLevel, message: string): void {
     }
     fs.appendFileSync(logFile, logLine + '\n');
   } catch (error) {
-    console.error(`Failed to write to log file: ${(error as Error).message}`);
+    if (!quietMode) {
+      console.error(`Failed to write to log file: ${(error as Error).message}`);
+    }
   }
 }
 
