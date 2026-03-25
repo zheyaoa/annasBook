@@ -15,10 +15,6 @@
     "build": "npm run clean && tsc",
     "build:watch": "tsc --watch",
     "dev": "tsx commands/cli.ts",
-    "search": "tsx scripts/cli-search.ts",
-    "download": "tsx scripts/cli-download.ts",
-    "batch": "tsx scripts/cli-batch.ts",
-    "cli": "tsx commands/cli.ts",
     "link": "npm run build && npm link"
   },
   "keywords": [],
