@@ -39,3 +39,13 @@ export async function withRetry<T>(
 
   throw lastError;
 }
+
+/**
+ * Sanitize folder name by removing filesystem-unsafe characters and emojis
+ */
+export function sanitizeFolderName(name: string): string {
+  return name
+    .replace(/[\/\\:*?"<>|]/g, '')                      // Remove filesystem-unsafe characters
+    .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/gu, '')  // Remove emojis and symbols
+    .trim();
+}

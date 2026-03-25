@@ -86,3 +86,27 @@ export interface BookDetailsExtended {
   language: string;
   size: string;
 }
+
+export interface ConvertResult {
+  success: boolean;
+  outputPath?: string;
+  error?: string;
+}
+
+export interface SheetResult {
+  name: string;
+  total: number;
+  downloaded: number;
+  skipped: number;
+  failed: number;
+  results: BatchResult[];
+}
+
+export interface BatchResult {
+  row: number;
+  title: string;
+  success: boolean;
+  filePath?: string;
+  error?: string;
+  md5?: string;
+}

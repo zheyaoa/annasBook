@@ -6,15 +6,73 @@ const REQUIRED_COLUMNS = ['语言', '书名', 'Book title'];
 
 export class ExcelReader {
   private workbook: XLSX.WorkBook;
-  private sheet: XLSX.WorkSheet;
+  private sheet!: XLSX.WorkSheet;
   private filePath: string;
+  private currentSheetName!: string;
 
-  constructor(filePath: string) {
+  constructor(filePath: string, sheetName?: string) {
     this.filePath = filePath;
     this.workbook = XLSX.readFile(filePath);
-    const sheetName = this.workbook.SheetNames[0];
+
+    if (sheetName) {
+      this.selectSheet(sheetName);
+    } else {
+      // Backward compatibility: default to first sheet
+      this.currentSheetName = this.workbook.SheetNames[0];
+      this.sheet = this.workbook.Sheets[this.currentSheetName];
+      this.validateColumns();
+    }
+  }
+
+  /**
+   * Get all sheet names in the workbook
+   */
+  getAllSheetNames(): string[] {
+    return this.workbook.SheetNames;
+  }
+
+  /**
+   * Switch to a different sheet
+   */
+  selectSheet(sheetName: string): void {
+    if (!this.workbook.SheetNames.includes(sheetName)) {
+      throw new Error(`Sheet not found: ${sheetName}`);
+    }
+    this.currentSheetName = sheetName;
     this.sheet = this.workbook.Sheets[sheetName];
     this.validateColumns();
+  }
+
+  /**
+   * Get current sheet name
+   */
+  getCurrentSheetName(): string {
+    return this.currentSheetName;
+  }
+
+  /**
+   * Ensure "下载状态" column exists, create if missing
+   */
+  ensureStatusColumn(): void {
+    const range = XLSX.utils.decode_range(this.sheet['!ref'] || 'A1');
+    const colMap: Record<string, string> = {};
+
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cell = this.sheet[XLSX.utils.encode_cell({ r: 0, c: col })];
+      if (cell && cell.v !== undefined) {
+        colMap[String(cell.v)] = XLSX.utils.encode_col(col);
+      }
+    }
+
+    if (!colMap['下载状态']) {
+      const newColIndex = range.e.c + 1;
+      const newCol = XLSX.utils.encode_col(newColIndex);
+      this.sheet[`${newCol}1`] = { t: 's', v: '下载状态' };
+      this.sheet['!ref'] = XLSX.utils.encode_range({
+        s: range.s,
+        e: { r: range.e.r, c: newColIndex }
+      });
+    }
   }
 
   private validateColumns(): void {
