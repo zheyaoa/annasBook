@@ -32,6 +32,8 @@ const formatText = $formatDiv.text() || '';
 const formatInfo = this.parseFormatInfo(formatText);
 ```
 
+删除调试语句 `console.log('parentText:',parentText)`。
+
 ### 2. 扩展 `parseFormatInfo` 支持更多格式
 
 支持：PDF、EPUB、DJVU、ZIP
@@ -42,14 +44,36 @@ if (lowerPart === 'pdf' || lowerPart === 'epub' || lowerPart === 'djvu' || lower
 }
 ```
 
-### 3. 更新类型定义
+更新方法返回类型，使用共享类型定义。
 
-`types.ts` 中的 `SearchResult.format` 类型从 `'pdf' | 'epub'` 扩展为 `'pdf' | 'epub' | 'djvu' | 'zip'`。
+### 3. 更新 `extractFormat` 方法
+
+当前 `extractFormat` 方法只支持 PDF/EPUB，需扩展支持 DJVU/ZIP：
+
+```typescript
+if (text === 'DJVU') return 'djvu';
+if (text === 'ZIP') return 'zip';
+```
+
+### 4. 更新类型定义
+
+在 `types.ts` 中定义共享格式类型：
+
+```typescript
+export type BookFormat = 'pdf' | 'epub' | 'djvu' | 'zip';
+```
+
+更新以下接口使用该类型：
+- `SearchResult.format`
+- `BookDetailsExtended.format`
 
 ## 影响范围
 
-- `src/searcher.ts`：修改 `parseSearchResults`、`parseFormatInfo` 方法
-- `src/types.ts`：更新 `SearchResult` 接口的 `format` 字段类型
+- `src/types.ts`：定义 `BookFormat` 类型，更新 `SearchResult`、`BookDetailsExtended` 接口
+- `src/searcher.ts`：
+  - 修改 `parseSearchResults` 方法（精确定位格式 div，删除调试语句）
+  - 修改 `parseFormatInfo` 方法（扩展格式支持，更新返回类型）
+  - 修改 `extractFormat` 方法（扩展格式支持）
 
 ## 验证
 
