@@ -54,17 +54,10 @@ export class ExcelReader {
    * Ensure "下载状态" column exists, create if missing
    */
   ensureStatusColumn(): void {
-    const range = XLSX.utils.decode_range(this.sheet['!ref'] || 'A1');
-    const colMap: Record<string, string> = {};
-
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cell = this.sheet[XLSX.utils.encode_cell({ r: 0, c: col })];
-      if (cell && cell.v !== undefined) {
-        colMap[String(cell.v)] = XLSX.utils.encode_col(col);
-      }
-    }
+    const colMap = this.getColumnMap();
 
     if (!colMap['下载状态']) {
+      const range = XLSX.utils.decode_range(this.sheet['!ref'] || 'A1');
       const newColIndex = range.e.c + 1;
       const newCol = XLSX.utils.encode_col(newColIndex);
       this.sheet[`${newCol}1`] = { t: 's', v: '下载状态' };
@@ -75,19 +68,24 @@ export class ExcelReader {
     }
   }
 
-  private validateColumns(): void {
+  private getColumnMap(): Record<string, string> {
     const range = XLSX.utils.decode_range(this.sheet['!ref'] || 'A1');
-    const headers: string[] = [];
+    const colMap: Record<string, string> = {};
 
     for (let col = range.s.c; col <= range.e.c; col++) {
       const cell = this.sheet[XLSX.utils.encode_cell({ r: 0, c: col })];
       if (cell && cell.v !== undefined) {
-        headers.push(String(cell.v));
+        colMap[String(cell.v)] = XLSX.utils.encode_col(col);
       }
     }
 
+    return colMap;
+  }
+
+  private validateColumns(): void {
+    const colMap = this.getColumnMap();
     for (const required of REQUIRED_COLUMNS) {
-      if (!headers.includes(required)) {
+      if (!colMap[required]) {
         throw new Error(`Missing required column: ${required}`);
       }
     }
@@ -118,13 +116,7 @@ export class ExcelReader {
     const books: BookInfo[] = [];
     const seenBooks = new Set<string>();
 
-    const colMap: Record<string, string> = {};
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cell = this.sheet[XLSX.utils.encode_cell({ r: 0, c: col })];
-      if (cell && cell.v !== undefined) {
-        colMap[String(cell.v)] = XLSX.utils.encode_col(col);
-      }
-    }
+    const colMap = this.getColumnMap();
 
     for (let row = range.s.r + 1; row <= range.e.r; row++) {
       const book: BookInfo = {
@@ -160,15 +152,7 @@ export class ExcelReader {
   }
 
   updateStatus(rowIndex: number, status: string, bookLink?: string): void {
-    const range = XLSX.utils.decode_range(this.sheet['!ref'] || 'A1');
-
-    const colMap: Record<string, string> = {};
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cell = this.sheet[XLSX.utils.encode_cell({ r: 0, c: col })];
-      if (cell && cell.v !== undefined) {
-        colMap[String(cell.v)] = XLSX.utils.encode_col(col);
-      }
-    }
+    const colMap = this.getColumnMap();
 
     const statusCol = colMap['下载状态'] || 'J';
     this.sheet[`${statusCol}${rowIndex + 1}`] = { t: 's', v: status };
@@ -181,23 +165,13 @@ export class ExcelReader {
 
   updateDownloadUrl(rowIndex: number, downloadUrl: string): void {
     const range = XLSX.utils.decode_range(this.sheet['!ref'] || 'A1');
-
-    // 查找"下载链接"列
-    const colMap: Record<string, string> = {};
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cell = this.sheet[XLSX.utils.encode_cell({ r: 0, c: col })];
-      if (cell && cell.v !== undefined) {
-        colMap[String(cell.v)] = XLSX.utils.encode_col(col);
-      }
-    }
+    const colMap = this.getColumnMap();
 
     let urlCol = colMap['下载链接'];
     if (!urlCol) {
-      // 列不存在，创建新列
       const newColIndex = range.e.c + 1;
       urlCol = XLSX.utils.encode_col(newColIndex);
       this.sheet[`${urlCol}1`] = { t: 's', v: '下载链接' };
-      // 更新 sheet 范围
       this.sheet['!ref'] = XLSX.utils.encode_range({
         s: range.s,
         e: { r: range.e.r, c: newColIndex }
