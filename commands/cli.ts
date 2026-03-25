@@ -12,7 +12,7 @@ import { loadConfig, validateConfig } from '../src/config.js';
 import { runSearch } from './search.js';
 import { runDownload } from './download.js';
 import { runBatch } from './batch.js';
-import { runConfig } from './config.js';
+import { runConfig } from './config-command.js';
 import { runConvert } from './convert.js';
 
 const VERSION = '1.0.0';
@@ -364,8 +364,8 @@ async function main(): Promise<void> {
   }
 
   // Load config for other commands
-  const config = loadConfig(globalOptions.config, { skipExcelCheck: command !== 'batch' });
-  validateConfig(config, { skipExcelCheck: command !== 'batch' });
+  const config = loadConfig(globalOptions.config, { skipExcelCheck: command === 'batch' });
+  validateConfig(config, { skipExcelCheck: command === 'batch' });
 
   // Apply global output override
   if (globalOptions.output) {

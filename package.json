@@ -10,7 +10,7 @@
     "dist"
   ],
   "scripts": {
-    "start": "tsx commands/cli.ts",
+    "start": "tsx commands/batch.ts --excel /Users/yuyuxin/code/annasBook/assets/NWC虚拟图书馆.xlsx",
     "clean": "node -e \"const fs=require('fs'); fs.rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc",
     "build:watch": "tsc --watch",

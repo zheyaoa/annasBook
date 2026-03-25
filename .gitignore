@@ -10,3 +10,4 @@ test
 src/assets/
 docs/superpowers/workspace/
 skills/*
+.DS_Store

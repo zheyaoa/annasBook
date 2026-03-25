@@ -276,6 +276,7 @@ export class Searcher {
 
         // Find format info
         const parentText = $parent.text();
+        console.log('parentText:',parentText)
         const formatInfo = this.parseFormatInfo(parentText);
 
         results.push({
@@ -480,6 +481,14 @@ Reply only the number of the best match, or "none" if no match.`;
     const epubResults = results.filter(r => r.format === 'epub' && r.title);
 
     let candidates = pdfResults.length > 0 ? pdfResults : epubResults;
+
+    // Filter by minimum size (0.3MB)
+    const MIN_SIZE_BYTES = 314573; // 0.3 * 1024 * 1024
+    candidates = candidates.filter(r => r.sizeBytes >= MIN_SIZE_BYTES);
+    if (candidates.length === 0) {
+      logger.warn(`No results meet minimum size requirement (0.3MB)`);
+      return null;
+    }
 
     // Filter by language
     if (bookLanguage) {
