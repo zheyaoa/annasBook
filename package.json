@@ -10,15 +10,15 @@
     "dist"
   ],
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "tsx src/commands/cli.ts",
     "clean": "node -e \"const fs=require('fs'); fs.rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc",
     "build:watch": "tsc --watch",
-    "dev": "tsx src/cli.ts",
+    "dev": "tsx src/commands/cli.ts",
     "search": "tsx scripts/cli-search.ts",
     "download": "tsx scripts/cli-download.ts",
     "batch": "tsx scripts/cli-batch.ts",
-    "cli": "tsx src/cli.ts",
+    "cli": "tsx src/commands/cli.ts",
     "link": "npm run build && npm link"
   },
   "keywords": [],
@@ -27,6 +27,7 @@
   "dependencies": {
     "axios": "^1.13.6",
     "cheerio": "^1.2.0",
+    "execa": "^9.6.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

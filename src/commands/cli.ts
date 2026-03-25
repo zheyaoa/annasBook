@@ -8,11 +8,12 @@
  *   annas-download config init
  */
 
-import { loadConfig, validateConfig, getConfigPath } from './config.js';
-import { runSearch } from './commands/search.js';
-import { runDownload } from './commands/download.js';
-import { runBatch } from './commands/batch.js';
-import { runConfig } from './commands/config.js';
+import { loadConfig, validateConfig, getConfigPath } from '../config.js';
+import { runSearch } from './search.js';
+import { runDownload } from './download.js';
+import { runBatch } from './batch.js';
+import { runConfig } from './config.js';
+import { runConvert } from './convert.js';
 
 const VERSION = '1.0.0';
 
@@ -77,6 +78,7 @@ Commands:
   download   Download a book
   batch      Batch download from Excel file
   config     Manage configuration
+  convert    Convert EPUB to PDF
 
 Global Options:
   --config <path>   Use specified config file
@@ -90,6 +92,7 @@ Examples:
   annas-download download --md5 abc123...
   annas-download batch --excel ./books.xlsx --limit 10
   annas-download config init
+  annas-download convert ./downloads/book.epub
 
 Run 'annas-download <command> --help' for command-specific options.
 `);
@@ -165,6 +168,23 @@ Examples:
   annas-download config list
   annas-download config path
   annas-download config init
+`);
+      break;
+
+    case 'convert':
+      console.log(`
+Usage: annas-download convert <input.epub> [options]
+
+Arguments:
+  <input.epub>       Path to EPUB file to convert (required)
+
+Options:
+  --output <path>    Output path or directory for PDF (default: same as input)
+
+Examples:
+  annas-download convert ./downloads/book.epub
+  annas-download convert ./downloads/book.epub --output ./pdfs
+  annas-download convert ./downloads/book.epub --output ./pdfs/mybook.pdf
 `);
       break;
 
@@ -298,6 +318,24 @@ function parseConfigArgs(args: string[]): { subcommand?: 'list' | 'path' | 'init
   process.exit(1);
 }
 
+function parseConvertArgs(args: string[]): { input?: string; output?: string } {
+  const result: { input?: string; output?: string } = {};
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--output' && args[i + 1]) {
+      result.output = args[i + 1];
+      i++;
+    } else if (args[i] === '--help' || args[i] === '-h') {
+      printCommandHelp('convert');
+      process.exit(0);
+    } else if (!args[i].startsWith('-') && !result.input) {
+      result.input = args[i];
+    }
+  }
+
+  return result;
+}
+
 async function main(): Promise<void> {
   const { globalOptions, command, commandArgs } = parseArgs();
 
@@ -313,8 +351,20 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Handle convert command separately (doesn't need config file)
+  if (command === 'convert') {
+    const convertArgs = parseConvertArgs(commandArgs);
+    if (!convertArgs.input) {
+      console.error('Error: Input EPUB file is required');
+      printCommandHelp('convert');
+      process.exit(1);
+    }
+    await runConvert({ input: convertArgs.input, output: convertArgs.output });
+    return;
+  }
+
   // Load config for other commands
-  const config = loadConfig(globalOptions.config);
+  const config = loadConfig(globalOptions.config, { skipExcelCheck: command !== 'batch' });
   validateConfig(config, { skipExcelCheck: command !== 'batch' });
 
   // Apply global output override
