@@ -8,7 +8,7 @@
  *   annas-download config init
  */
 
-import { loadConfig, validateConfig, getConfigPath } from '../src/config.js';
+import { loadConfig, validateConfig } from '../src/config.js';
 import { runSearch } from './search.js';
 import { runDownload } from './download.js';
 import { runBatch } from './batch.js';
