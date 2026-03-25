@@ -29,10 +29,11 @@ HTML 结构中，格式信息在单独的 div 中：
 ```typescript
 const $formatDiv = $parent.find('.text-gray-800.font-semibold.text-sm');
 const formatText = $formatDiv.text() || '';
+logger.debug(`Format text for ${md5}: ${formatText}`);
 const formatInfo = this.parseFormatInfo(formatText);
 ```
 
-删除调试语句 `console.log('parentText:',parentText)`。
+删除调试语句 `console.log('parentText:',parentText)`，改为使用 `logger.debug` 写入日志文件。
 
 ### 2. 扩展 `parseFormatInfo` 支持更多格式
 
