@@ -287,7 +287,8 @@ export class Searcher {
         // Find format info using specific CSS selector
         const $formatDiv = $parent.find('.text-gray-800.font-semibold.text-sm');
         const formatText = $formatDiv.text() || '';
-        logger.debug(`Format text for ${md5}: ${formatText}`);
+        const formatHtml = $formatDiv.html() || '';
+        logger.debug(`Format div HTML for ${md5}: ${formatHtml}`);
         const formatInfo = this.parseFormatInfo(formatText);
 
         results.push({
