@@ -6,6 +6,8 @@ export type ErrorCode =
 
 export const FATAL_ERRORS: ErrorCode[] = ['CAPTCHA_DETECTED', 'CONSECUTIVE_FAILURES', 'NO_DOWNLOADS_LEFT'];
 
+export type BookFormat = 'pdf' | 'epub' | 'djvu' | 'zip';
+
 export interface Config {
   apiKey: string;
   baseUrl: string;
@@ -42,7 +44,7 @@ export interface SearchResult {
   md5: string;
   title: string;
   author: string;
-  format: 'pdf' | 'epub';
+  format: BookFormat;
   language: string;
   size: string;
   sizeBytes: number;
@@ -80,7 +82,7 @@ export interface FastDownloadApiResult {
 export interface BookDetailsExtended {
   title: string;
   author: string;
-  format: 'pdf' | 'epub';
+  format: BookFormat;
   year: string;
   publisher: string;
   language: string;

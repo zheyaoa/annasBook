@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
-type LogLevel = 'INFO' | 'WARN' | 'ERROR';
+type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
 const COLORS = {
-  INFO: '\x1b[0m',    // Default/white
-  WARN: '\x1b[33m',   // Yellow
-  ERROR: '\x1b[31m',  // Red
+  DEBUG: '\x1b[90m',   // Gray (仅写文件时不用)
+  INFO: '\x1b[0m',     // Default/white
+  WARN: '\x1b[33m',    // Yellow
+  ERROR: '\x1b[31m',   // Red
   RESET: '\x1b[0m',
 };
 
@@ -39,8 +40,8 @@ function log(level: LogLevel, message: string): void {
   const timestamp = formatTimestamp();
   const logLine = `[${timestamp}] [${level}] ${message}`;
 
-  // Only output to console if not in quiet mode
-  if (!quietMode) {
+  // DEBUG 级别只写文件，不输出控制台
+  if (!quietMode && level !== 'DEBUG') {
     const color = COLORS[level];
     const coloredLogLine = `${color}${logLine}${COLORS.RESET}`;
     if (level === 'ERROR') {
@@ -67,6 +68,7 @@ function log(level: LogLevel, message: string): void {
 }
 
 export const logger = {
+  debug: (message: string) => log('DEBUG', message),
   info: (message: string) => log('INFO', message),
   warn: (message: string) => log('WARN', message),
   error: (message: string) => log('ERROR', message),

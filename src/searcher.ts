@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { Config, BookInfo, SearchResult, BookDetailsExtended } from './types.js';
+import { Config, BookInfo, SearchResult, BookDetailsExtended, BookFormat } from './types.js';
 import { HttpClient } from './http-client.js';
 import { logger } from './logger.js';
 
@@ -27,11 +27,11 @@ export class Searcher {
     }
   }
 
-  private parseFormatInfo(text: string): { format: 'pdf' | 'epub'; language: string; size: string; sizeBytes: number; year: string } {
-    // Parse text like "English [en] · PDF · 26.8MB · 1971"
+  private parseFormatInfo(text: string): { format: BookFormat; language: string; size: string; sizeBytes: number; year: string } {
+    // Parse text like "Chinese [zh] · PDF · 26.8MB · 1971"
     const parts = text.split('·').map(p => p.trim());
 
-    let format: 'pdf' | 'epub' = 'pdf';
+    let format: BookFormat = 'pdf';
     let language = '';
     let size = '';
     let sizeBytes = 0;
@@ -39,8 +39,8 @@ export class Searcher {
 
     for (const part of parts) {
       const lowerPart = part.toLowerCase();
-      if (lowerPart === 'pdf' || lowerPart === 'epub') {
-        format = lowerPart;
+      if (lowerPart === 'pdf' || lowerPart === 'epub' || lowerPart === 'djvu' || lowerPart === 'zip') {
+        format = lowerPart as BookFormat;
       } else if (part.match(/^\d{4}$/)) {
         year = part;
       } else if (part.match(/[\d.]+\s*(KB|MB|GB)/i)) {
@@ -206,10 +206,10 @@ export class Searcher {
   }
 
   /**
-   * Extract format (PDF/EPUB) from book details page.
+   * Extract format (PDF/EPUB/DJVU/ZIP) from book details page.
    * Looks for format in specific elements rather than scanning entire page text.
    */
-  private extractFormat($: cheerio.CheerioAPI): 'pdf' | 'epub' {
+  private extractFormat($: cheerio.CheerioAPI): BookFormat {
     // Look for format in elements that typically contain file info
     // Try specific selectors first, then fall back to more general ones
     const formatSelectors = [
@@ -225,12 +225,14 @@ export class Searcher {
         const text = $(elements[i]).text().trim().toUpperCase();
         if (text === 'EPUB') return 'epub';
         if (text === 'PDF') return 'pdf';
+        if (text === 'DJVU') return 'djvu';
+        if (text === 'ZIP') return 'zip';
       }
     }
 
     // Fall back to looking for format text in structured metadata sections
     // Look for patterns like "PDF" or "EPUB" in smaller text sections
-    let format: 'pdf' | 'epub' = 'pdf';
+    let format: BookFormat = 'pdf';
     $('div, span, p').each((_, el) => {
       const text = $(el).text().trim();
       // Only check short text snippets to avoid false positives
@@ -242,6 +244,14 @@ export class Searcher {
         }
         if (upperText === 'PDF') {
           format = 'pdf';
+          return false; // break each loop
+        }
+        if (upperText === 'DJVU') {
+          format = 'djvu';
+          return false; // break each loop
+        }
+        if (upperText === 'ZIP') {
+          format = 'zip';
           return false; // break each loop
         }
       }
@@ -274,10 +284,11 @@ export class Searcher {
           if (text && !author) author = text;
         });
 
-        // Find format info
-        const parentText = $parent.text();
-        console.log('parentText:',parentText)
-        const formatInfo = this.parseFormatInfo(parentText);
+        // Find format info using specific CSS selector
+        const $formatDiv = $parent.find('.text-gray-800.font-semibold.text-sm');
+        const formatText = $formatDiv.text() || '';
+        logger.debug(`Format text for ${md5}: ${formatText}`);
+        const formatInfo = this.parseFormatInfo(formatText);
 
         results.push({
           md5,
