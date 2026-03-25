@@ -1,8 +1,8 @@
-import { HttpClient } from '../http-client.js';
-import { Searcher } from '../searcher.js';
-import { SearchResult } from '../types.js';
-import { setQuiet } from '../logger.js';
-import { Config } from '../types.js';
+import { HttpClient } from '../src/http-client.js';
+import { Searcher } from '../src/searcher.js';
+import { SearchResult } from '../src/types.js';
+import { setQuiet } from '../src/logger.js';
+import { Config } from '../src/types.js';
 
 export interface SearchArgs {
   title?: string;

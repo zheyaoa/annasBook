@@ -4,6 +4,7 @@ import { Config, SearchResult, BookInfo, DownloadResult, FastDownloadResponse, F
 import { HttpClient } from './http-client.js';
 import { logger } from './logger.js';
 import { sleep } from './utils.js';
+import { Converter } from './converter.js';
 
 const INVALID_CHARS_REGEX = /[/\\:*?"<>|]/g;
 
@@ -91,10 +92,21 @@ export class Downloader {
     const filename = this.generateFilename(book, result);
     const destPath = path.join(this.config.downloadDir, filename);
 
+    // 检查文件是否已存在（包括转换后的 PDF）
     if (fs.existsSync(destPath)) {
       logger.info(`File already exists: ${filename}`);
       this.consecutiveFailures = 0;
       return { success: true, filePath: destPath };
+    }
+
+    // 如果是 EPUB，检查是否已有对应的 PDF
+    if (result.format === 'epub') {
+      const pdfPath = destPath.replace(/\.epub$/i, '.pdf');
+      if (fs.existsSync(pdfPath)) {
+        logger.info(`PDF already exists: ${path.basename(pdfPath)}`);
+        this.consecutiveFailures = 0;
+        return { success: true, filePath: pdfPath };
+      }
     }
 
     logger.info(`Downloading: ${filename}`);
@@ -131,22 +143,26 @@ export class Downloader {
 
         // 处理格式修正
         const actualFormat = validationResult.actualFormat || result.format;
+        let finalPath = destPath;
+
         if (actualFormat !== result.format) {
           const newPath = destPath.replace(/\.[^.]+$/, `.${actualFormat}`);
           if (!fs.existsSync(newPath)) {
             fs.renameSync(destPath, newPath);
             logger.info(`Format corrected: ${result.format} -> ${actualFormat}`);
           }
-          this.consecutiveFailures = 0;
-          const actualSize = fs.statSync(newPath).size;
-          logger.info(`Downloaded: ${path.basename(newPath)} (${actualSize} bytes)`);
-          return { success: true, filePath: newPath, downloadUrl };
+          finalPath = newPath;
+        }
+
+        // EPUB 转 PDF
+        if (actualFormat === 'epub') {
+          finalPath = await this.convertEpubToPdf(finalPath);
         }
 
         this.consecutiveFailures = 0;
-        const actualSize = fs.statSync(destPath).size;
-        logger.info(`Downloaded: ${filename} (${actualSize} bytes)`);
-        return { success: true, filePath: destPath, downloadUrl };
+        const actualSize = fs.statSync(finalPath).size;
+        logger.info(`Downloaded: ${path.basename(finalPath)} (${actualSize} bytes)`);
+        return { success: true, filePath: finalPath, downloadUrl };
 
       } catch (error) {
         const errorMsg = (error as Error).message;
@@ -231,6 +247,20 @@ export class Downloader {
     } catch (error) {
       logger.error(`Failed to validate downloaded file: ${(error as Error).message}`);
       return { valid: false, error: `Validation failed: ${(error as Error).message}` };
+    }
+  }
+
+  private async convertEpubToPdf(filePath: string): Promise<string> {
+    const converter = new Converter();
+    const result = await converter.convert(filePath);
+
+    if (result.success && result.outputPath) {
+      fs.unlinkSync(filePath);
+      logger.info(`Converted to PDF: ${result.outputPath}`);
+      return result.outputPath;
+    } else {
+      logger.warn(`Conversion failed, keeping EPUB: ${result.error}`);
+      return filePath;
     }
   }
 }

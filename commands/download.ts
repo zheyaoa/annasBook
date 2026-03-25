@@ -1,9 +1,9 @@
 import readline from 'readline';
-import { Config, SearchResult, BookInfo, BookDetailsExtended } from '../types.js';
-import { HttpClient } from '../http-client.js';
-import { Searcher } from '../searcher.js';
-import { Downloader } from '../downloader.js';
-import { setQuiet } from '../logger.js';
+import { Config, SearchResult, BookInfo, BookDetailsExtended } from '../src/types.js';
+import { HttpClient } from '../src/http-client.js';
+import { Searcher } from '../src/searcher.js';
+import { Downloader } from '../src/downloader.js';
+import { setQuiet } from '../src/logger.js';
 
 interface DownloadArgs {
   md5?: string;

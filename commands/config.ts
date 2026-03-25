@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { getConfigPath, getAllConfigPaths } from '../config.js';
+import { getConfigPath, getAllConfigPaths } from '../src/config.js';
 
 interface ConfigArgs {
   subcommand?: 'list' | 'path' | 'init';
