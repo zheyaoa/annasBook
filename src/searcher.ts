@@ -28,7 +28,8 @@ export class Searcher {
   }
 
   private parseFormatInfo(text: string): { format: BookFormat; language: string; size: string; sizeBytes: number; year: string } {
-    // Parse text like "Chinese [zh] · PDF · 26.8MB · 1971"
+    // Parse text like "English [en] · EPUB · 0.2MB · 2014"
+    // Note: Some results may not have language field
     const parts = text.split('·').map(p => p.trim());
 
     let format: BookFormat = 'pdf';
@@ -46,7 +47,8 @@ export class Searcher {
       } else if (part.match(/[\d.]+\s*(KB|MB|GB)/i)) {
         size = part;
         sizeBytes = this.parseSize(part);
-      } else if (part.includes('[') && part.includes(']')) {
+      } else if (!language && part.includes('[') && part.includes(']') && part.length < 30) {
+        // Only set language once, and filter out invalid long parts (like JavaScript code)
         language = part;
       }
     }
@@ -264,7 +266,7 @@ export class Searcher {
     const $ = cheerio.load(html);
     const results: SearchResult[] = [];
 
-    // Find all MD5 links
+    // Find all MD5 links with non-empty titles (filter out cover image links)
     $('a[href^="/md5/"]').each((_, element) => {
       try {
         const $link = $(element);
@@ -274,24 +276,23 @@ export class Searcher {
         if (!md5 || md5.length < 20) return; // Invalid MD5
 
         const title = $link.text().trim();
-        if (!title) return; // Skip results with empty titles
+        if (!title) return; // Skip results with empty titles (cover images)
 
-        // Find author link (spec: Links containing icon-[mdi--user-edit])
-        const $parent = $link.closest('tr, div');
-        let author = '';
-        $parent.find('a[class*="icon-[mdi--user-edit]"], a:has([class*="icon-[mdi--user-edit]"])').each((_, el) => {
-          const text = $(el).text().trim();
-          if (text && !author) author = text;
-        });
+        // Find the result container (parent with class "flex pt-3")
+        const $parent = $link.closest('.flex.pt-3');
 
-        // Find format info using specific CSS selector
-        const $formatDiv = $parent.find('.text-gray-800.font-semibold.text-sm');
+        // Find author link (icon-[mdi--user-edit] indicates author)
+        const author = $parent.find('a:has(span[class*="icon-[mdi--user-edit]"])').text().trim();
+
+        // Find format info div
+        const $formatDiv = $parent.find('div[class*="text-gray-800"][class*="font-semibold"]').first();
         const formatText = $formatDiv.text() || '';
-        const formatHtml = $formatDiv.html() || '';
-        logger.debug(`Format div HTML for ${md5}: ${formatHtml}`);
         const formatInfo = this.parseFormatInfo(formatText);
 
-        results.push({
+        // Find publisher link (icon-[mdi--company] indicates publisher)
+        const publisher = $parent.find('a:has(span[class*="icon-[mdi--company]"])').text().trim();
+
+        const result: SearchResult = {
           md5,
           title,
           author,
@@ -300,8 +301,11 @@ export class Searcher {
           size: formatInfo.size,
           sizeBytes: formatInfo.sizeBytes,
           year: formatInfo.year,
-          publisher: '',
-        });
+          publisher,
+        };
+
+        logger.debug(`Parsed search result: ${JSON.stringify(result)}`);
+        results.push(result);
       } catch (error) {
         logger.warn(`Failed to parse search result: ${(error as Error).message}`);
       }
