@@ -22,9 +22,9 @@ export class Previewer {
   async generatePreview(options: PreviewOptions): Promise<PreviewResult> {
     const { inputPath } = options;
 
-    // Validate input file exists
-    if (!fs.existsSync(inputPath)) {
-      return { success: false, error: `Error: Input file not found: ${inputPath}` };
+    // Validate input file exists and is a regular file
+    if (!fs.existsSync(inputPath) || !fs.statSync(inputPath).isFile()) {
+      return { success: false, error: `Error: Input is not a valid file: ${inputPath}` };
     }
 
     // Determine output path
@@ -62,10 +62,8 @@ export class Previewer {
       }
 
       // Run pdftoppm: -png (PNG output), -f 1 -l 1 (first page only)
-      execSync(
-        `pdftoppm -png -f 1 -l 1 "${inputPath}" "${outputPrefix}"`,
-        { stdio: 'pipe' }
-      );
+      // Pass arguments as array to avoid command injection
+      execSync('pdftoppm', ['-png', '-f', '1', '-l', '1', inputPath, outputPrefix], { stdio: 'pipe', timeout: 30000 });
 
       // pdftoppm creates outputPrefix-1.png (or -01.png with leading zero), rename to our outputPath
       const generatedFile1 = `${outputPrefix}-1.png`;
