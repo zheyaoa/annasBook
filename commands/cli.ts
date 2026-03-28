@@ -438,6 +438,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Handle install command separately (doesn't need config file)
+  if (command === 'install') {
+    await runInstall();
+    return;
+  }
+
   // Check for help flag before loading config (skip Excel file check)
   if (commandArgs.includes('-h') || commandArgs.includes('--help')) {
     printCommandHelp(command);
@@ -479,10 +485,6 @@ async function main(): Promise<void> {
       await runBatch(batchArgs, config);
       break;
     }
-
-    case 'install':
-      await runInstall();
-      break;
 
     default:
       console.error(`Unknown command: ${command}`);
