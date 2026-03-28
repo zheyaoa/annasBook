@@ -112,3 +112,6 @@ export interface BatchResult {
   error?: string;
   md5?: string;
 }
+
+// Re-export PreviewOptions and PreviewResult from previewer.ts
+export type { PreviewOptions, PreviewResult } from './previewer.js';
