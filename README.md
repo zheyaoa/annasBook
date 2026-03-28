@@ -1,195 +1,200 @@
 # Anna's Archive Book Downloader
 
-从 Anna's Archive 搜索和下载书籍的 TypeScript CLI 工具。支持 Excel 批量处理和单本书籍 CLI 模式。
+CLI tool to search and download books from Anna's Archive mirror sites.
 
-## 功能特性
+## Features
 
-- 🔍 **搜索模式**: 搜索书籍，显示结果不下载
-- 📥 **下载模式**: 搜索后交互选择下载，或直接用 MD5 下载
-- 📊 **批量模式**: 从 Excel 文件批量下载，支持 JSON 输出
-- 🔄 **智能匹配**: 自动选择最佳匹配，支持 LLM 辅助匹配
-- 🛡️ **错误处理**: 自动处理 CAPTCHA、速率限制、超时重试
+- 🔍 **Search** — Search books without downloading
+- 📥 **Download** — Interactive selection or MD5-based download
+- 📊 **Batch** — Batch download from Excel files with JSON output
+- 🔄 **Smart Matching** — Auto-select best match, with LLM-assisted fallback
+- 🛡️ **Error Handling** — CAPTCHA detection, rate limiting, timeout retry
 
-## 快速开始
+## Requirements
 
-### 安装依赖
+- Node.js 18+
+- Anna's Archive API key
+- `cookies.json` file (for downloads)
+
+## Installation
 
 ```bash
-npm install
+npm install -g @zheyao/annas-book-downloader
 ```
 
-### 配置
+**Install the Claude Code skill (optional but recommended):**
 
-创建 `config.json`:
+```bash
+annas-download install
+```
+
+This installs the `anna-downloader` skill to `~/.claude/skills/`, enabling Claude Code to help with book searches and downloads.
+
+## Quick Start
+
+### 1. Initialize config
+
+```bash
+annas-download config init
+```
+
+Edit `~/.annasbook/config.json` with your API key and mirror URL.
+
+### 2. Search for a book
+
+```bash
+annas-download search --title "The Great Gatsby"
+```
+
+### 3. Download a book
+
+```bash
+annas-download download --md5 <md5-hash>
+```
+
+## Usage
+
+### Search
+
+```bash
+annas-download search --title "Book Title" --author "Author"
+annas-download search --title "Dune" --format pdf
+annas-download search --title "1984" --format epub --lang en
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--title <string>` | Book title keywords (required) |
+| `--author <string>` | Author name |
+| `--format <pdf\|epub>` | Filter by format |
+| `--lang <en\|zh>` | Language preference (default: en) |
+| `--limit <number>` | Max results (default: 5) |
+| `--json` | JSON output |
+
+### Download
+
+**Interactive (search first):**
+```bash
+annas-download download --title "The Great Gatsby"
+```
+
+**By MD5 directly:**
+```bash
+annas-download download --md5 a1b2c3d4e5f6...
+annas-download download --md5 a1b2c3d4e5f6... --filename "My Book"
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--md5 <string>` | Book MD5 hash (bypasses search) |
+| `--title <string>` | Book title keywords (for search) |
+| `--author <string>` | Author name |
+| `--format <pdf\|epub>` | Filter by format |
+| `--lang <en\|zh>` | Language preference |
+| `--filename <string>` | Output filename (MD5 mode only) |
+| `--output <dir>` | Output directory |
+| `--json` | JSON output |
+
+### Batch Download
+
+```bash
+annas-download batch --excel ./books.xlsx
+annas-download batch --excel ./books.xlsx --output ./downloads --limit 10
+annas-download batch --excel ./books.xlsx --json
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--excel <file>` | Excel file path (required) |
+| `--output <dir>` | Output directory |
+| `--limit <n>` | Max downloads |
+| `--json` | JSON output |
+
+**Excel Format:**
+| Column | Description |
+|--------|-------------|
+| 语言 | "en" to use English title, otherwise Chinese |
+| 书名 | Chinese title |
+| Book title | English title |
+| 作者 | Chinese author |
+| Author | English author |
+| 下载状态 | Status (updated automatically) |
+| 书籍链接 | Optional MD5 link to skip search |
+
+### Config Management
+
+```bash
+annas-download config list    # Show config paths and values
+annas-download config path    # Show active config file path
+annas-download config init    # Create default config in ~/.annasbook/
+```
+
+### Convert EPUB to PDF
+
+```bash
+annas-download convert ./book.epub
+annas-download convert ./book.epub --output ./pdfs
+```
+
+### Generate PDF Preview
+
+```bash
+annas-download preview ./book.pdf
+annas-download preview ./book.pdf --output ./previews
+```
+
+Requires `pdftoppm` from poppler (macOS: `brew install poppler`)
+
+## Configuration
+
+Edit `~/.annasbook/config.json`:
 
 ```json
 {
   "apiKey": "your-api-key",
   "baseUrl": "https://annas-archive.gl",
   "downloadDir": "./downloads",
-  "proxy": "http://127.0.0.1:7892"
+  "rateLimitMs": 10000,
+  "requestTimeoutMs": 30000,
+  "downloadTimeoutMs": 300000,
+  "maxRetries": 3,
+  "proxy": "http://127.0.0.1:7892",
+  "downloadLimit": 10,
+  "openai": {
+    "enable": true,
+    "apiKey": "sk-...",
+    "baseUrl": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini"
+  }
 }
 ```
 
-创建 `cookies.json` (用于下载):
+| Field | Default | Description |
+|-------|---------|-------------|
+| `apiKey` | required | API key for Anna's Archive |
+| `baseUrl` | required | Base URL for mirror |
+| `downloadDir` | ./downloads | Download directory |
+| `rateLimitMs` | 10000 | Delay between requests (ms) |
+| `requestTimeoutMs` | 30000 | HTTP request timeout (ms) |
+| `downloadTimeoutMs` | 300000 | Download timeout (ms) |
+| `maxRetries` | 3 | Max retry attempts |
+| `proxy` | - | Optional proxy URL |
+| `downloadLimit` | unlimited | Max downloads per run |
+| `openai.apiKey` | - | OpenAI API key for LLM matching |
+| `openai.enable` | true | Enable LLM fallback |
 
-```json
-"cookie_name=cookie_value; another_cookie=value"
-```
+## Error Handling
 
-### 使用方法
+| Error | Meaning | Solution |
+|-------|---------|----------|
+| `CAPTCHA_DETECTED` | CAPTCHA challenge triggered | Visit search URL in browser, solve CAPTCHA, update `cookies.json` |
+| `NO_DOWNLOADS_LEFT` | Account has no downloads remaining | Use a different account |
+| `RATE_LIMITED` | Too many requests | Tool waits 60 seconds automatically |
+| 502 Bad Gateway | Rate limit too aggressive | Increase `rateLimitMs` to 10000 or higher |
 
-#### 搜索书籍
-
-```bash
-# 基本搜索
-npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-search.ts --title "The Great Gatsby"
-
-# 带作者和格式过滤
-npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-search.ts --title "1984" --author "Orwell" --format pdf
-
-# 中文书籍
-npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-search.ts --title "三体" --lang zh
-```
-
-#### 下载书籍
-
-```bash
-# 交互式下载 (搜索后选择)
-npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-download.ts --title "The Great Gatsby"
-
-# 通过 MD5 直接下载
-npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-download.ts --md5 <32位MD5哈希>
-
-# 指定输出文件名
-npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-download.ts --md5 <md5> --filename "My Book"
-```
-
-#### 批量下载
-
-```bash
-# 从 Excel 批量下载
-npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-batch.ts --excel ./books.xlsx
-
-# 指定输出目录和限制数量
-npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-batch.ts --excel ./books.xlsx --output ./downloads --limit 10
-
-# JSON 输出 (便于程序调用)
-npx tsx /Users/yuyuxin/code/annasBook/scripts/cli-batch.ts --excel ./books.xlsx --json
-```
-
-#### Excel 批量处理 (默认模式)
-
-```bash
-npx tsx /Users/yuyuxin/code/annasBook/src/index.ts
-```
-
-## 命令行选项
-
-### 搜索命令 (cli-search.ts)
-
-| 选项 | 说明 |
-|------|------|
-| `--title <string>` | 书名关键词 (必需) |
-| `--author <string>` | 作者名 |
-| `--format <pdf\|epub>` | 格式过滤 |
-| `--lang <en\|zh>` | 语言偏好 (默认: en) |
-
-### 下载命令 (cli-download.ts)
-
-| 选项 | 说明 |
-|------|------|
-| `--md5 <string>` | 书籍 MD5 哈希 (跳过搜索) |
-| `--filename <string>` | 输出文件名 (仅 MD5 模式) |
-| `--title <string>` | 书名关键词 (搜索模式) |
-| `--author <string>` | 作者名 |
-| `--format <pdf\|epub>` | 格式过滤 |
-| `--lang <en\|zh>` | 语言偏好 |
-
-### 批量命令 (cli-batch.ts)
-
-| 选项 | 说明 |
-|------|------|
-| `--excel <file>` | Excel 文件路径 (必需) |
-| `--output <dir>` | 下载输出目录 |
-| `--limit <n>` | 最大下载数量 |
-| `--json` | JSON 格式输出 |
-
-## Excel 格式
-
-| 列名 | 说明 |
-|------|------|
-| 语言 | "en" 使用英文标题搜索，否则用中文 |
-| 书名 | 中文标题 |
-| Book title | 英文标题 |
-| 作者 | 中文作者 |
-| Author | 英文作者 |
-| 下载状态 | 状态 (自动更新) |
-| 书籍链接 | 可选 MD5 链接 (跳过搜索) |
-
-## 配置说明
-
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `apiKey` | Anna's Archive API 密钥 | (必需) |
-| `baseUrl` | 镜像站点 URL | (必需) |
-| `downloadDir` | 下载目录 | `./downloads` |
-| `excelFile` | Excel 文件路径 | (批量模式必需) |
-| `rateLimitMs` | 请求间隔 | 2000 |
-| `requestTimeoutMs` | 请求超时 | 30000 |
-| `downloadTimeoutMs` | 下载超时 | 300000 |
-| `maxRetries` | 最大重试次数 | 3 |
-| `proxy` | 代理 URL | (可选) |
-| `downloadLimit` | 单次最大下载数 | 无限制 |
-| `openai.apiKey` | OpenAI API 密钥 (LLM 匹配) | (可选) |
-
-## 错误处理
-
-| 错误 | 说明 | 解决方案 |
-|------|------|----------|
-| `CAPTCHA_DETECTED` | 遇到验证码 | 浏览器访问站点，解决验证码后更新 cookies.json |
-| `NO_DOWNLOADS_LEFT` | 账户下载次数用完 | 更换账户 |
-| `RATE_LIMITED` | 请求过于频繁 | 自动等待 60 秒 |
-| `CONSECUTIVE_FAILURES` | 连续 5 次失败 | 检查网络/代理 |
-
-## 项目结构
-
-```
-src/
-├── index.ts        # Excel 批量模式入口
-├── cli.ts          # 统一 CLI 入口
-├── searcher.ts     # 搜索和结果解析
-├── downloader.ts   # 下载处理
-├── http-client.ts  # HTTP 客户端 (cookies, proxy)
-├── excel-reader.ts # Excel 读写
-├── config.ts       # 配置加载
-├── types.ts        # TypeScript 类型定义
-├── logger.ts       # 日志记录
-└── lock.ts         # 进程锁
-
-scripts/
-├── cli-search.ts   # 搜索命令
-├── cli-download.ts # 下载命令
-└── cli-batch.ts    # 批量命令
-```
-
-## 开发
-
-```bash
-# 构建
-npm run build
-
-# 运行测试
-npx tsx test/test-match.ts
-npx tsx test/test-fast-download.ts
-```
-
-## 依赖
-
-- [axios](https://github.com/axios/axios) - HTTP 客户端
-- [cheerio](https://github.com/cheeriojs/cheerio) - HTML 解析
-- [xlsx](https://github.com/SheetJS/sheetjs) - Excel 读写
-
-## 许可证
+## License
 
 ISC
