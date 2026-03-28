@@ -65,11 +65,13 @@ export class Previewer {
       // Pass arguments as array to avoid command injection
       execFileSync('pdftoppm', ['-png', '-f', '1', '-l', '1', inputPath, outputPrefix], { stdio: 'pipe', timeout: 30000 });
 
-      // pdftoppm creates outputPrefix-1.png (or -01.png with leading zero), rename to our outputPath
+      // pdftoppm creates outputPrefix-1.png, -01.png, or -001.png (depending on page count), rename to our outputPath
       const generatedFile1 = `${outputPrefix}-1.png`;
       const generatedFile01 = `${outputPrefix}-01.png`;
+      const generatedFile001 = `${outputPrefix}-001.png`;
       const generatedFile = fs.existsSync(generatedFile1) ? generatedFile1
         : fs.existsSync(generatedFile01) ? generatedFile01
+        : fs.existsSync(generatedFile001) ? generatedFile001
         : null;
 
       if (generatedFile) {

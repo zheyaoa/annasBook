@@ -53,7 +53,7 @@ const DEFAULT_CONFIG: Config = {
   baseUrl: 'https://annas-archive.gl',
   excelFile: './src/assets/海外中国.xlsx',
   downloadDir: './downloads',
-  rateLimitMs: 2000,
+  rateLimitMs: 10000,
   requestTimeoutMs: 30000,
   downloadTimeoutMs: 300000,
   maxRetries: 3,
