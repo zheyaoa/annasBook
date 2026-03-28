@@ -1,8 +1,12 @@
 {
-  "name": "@zheyao/annas-book-downloader",
+  "name": "annas-downloader",
   "version": "1.0.0",
   "type": "module",
   "description": "CLI tool to search and download books from Anna's Archive",
+  "bugs": {
+    "url": "https://github.com/zheyaoa/annasBook/issues"
+  },
+  "homepage": "https://github.com/zheyaoa/annasBook#readme",
   "bin": {
     "annas-download": "./bin/annas-download.js"
   },
@@ -17,7 +21,9 @@
     "build": "npm run clean && tsc",
     "build:watch": "tsc --watch",
     "dev": "tsx commands/cli.ts",
-    "link": "npm run build && npm link"
+    "link": "npm run build && npm link",
+    "prepublishOnly": "npm run build",
+    "release": "npm version patch && npm publish && git push --follow-tags"
   },
   "keywords": [
     "annas-archive",
@@ -28,9 +34,17 @@
   ],
   "author": "zheyao",
   "license": "ISC",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
+    }
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/zheyao/annas-book-downloader"
+    "url": "https://github.com/zheyaoa/annasBook.git"
   },
   "dependencies": {
     "axios": "^1.13.6",

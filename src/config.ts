@@ -51,7 +51,7 @@ function applyEnvOverrides(config: Config): Config {
 const DEFAULT_CONFIG: Config = {
   apiKey: '',
   baseUrl: 'https://annas-archive.gl',
-  excelFile: './src/assets/海外中国.xlsx',
+  excelFile: '',
   downloadDir: './downloads',
   rateLimitMs: 10000,
   requestTimeoutMs: 30000,
