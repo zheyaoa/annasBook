@@ -60,6 +60,27 @@ Authentication requires a `cookies.json` file in the project root. The file can 
 - An array of `{name, value}` objects
 - A key-value object
 
+## Directory Structure Rules
+
+| 目录 | 职责 | 可创建的文件类型 |
+|------|------|----------------|
+| `src/` | 核心业务逻辑库 | `.ts` 核心模块 |
+| `commands/` | CLI 命令处理器 | `.ts` 命令模块 |
+| `test/` | 测试脚本 | `.ts` 测试脚本 |
+| `scripts/` | 临时/一次性脚本 | `.ts` 临时脚本 (标记 `_delete` 后缀，等待清理) |
+| `docs/` | 文档 | `.md` 文档 |
+| `bin/` | 构建产物 | (自动生成) |
+| `logs/` | 日志文件 | (自动生成) |
+| `downloads/` | 下载的书籍 | (自动生成) |
+| `assets/` | 静态资源/Excel | `.xlsx` 等资源文件 |
+
+### File Creation Rules
+
+1. **禁止在根目录创建 `.ts` 文件** — 调试/临时脚本一律放 `scripts/`
+2. **临时脚本命名加 `_delete` 后缀** — 如 `debug-search_delete.ts`，表示"待删除"
+3. **禁止在 `src/` 和 `commands/` 创建带 `_delete` 后缀的文件**
+4. **定期清理** — 项目成员发现带 `_delete` 的文件应确认后删除
+
 ## Architecture
 
 ```
