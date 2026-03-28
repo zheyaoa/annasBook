@@ -99,6 +99,7 @@ export function loadConfig(configPath?: string, options?: { skipExcelCheck?: boo
       ...config,
       excelFile: options?.excelFile || config.excelFile,
       openai: config.openai ? {
+        enable: config.openai.enable,
         apiKey: config.openai.apiKey,
         baseUrl: config.openai.baseUrl || 'https://api.openai.com/v1',
         model: config.openai.model || 'gpt-4o-mini',
