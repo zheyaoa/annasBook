@@ -493,14 +493,11 @@ Reply only the number of the best match, or "none" if no match.`;
   async selectBestResult(results: SearchResult[], searchTitle: string, searchAuthor?: string, bookLanguage?: string): Promise<SearchResult | null> {
     if (results.length === 0) return null;
 
-    const pdfResults = results.filter(r => r.format === 'pdf' && r.title);
-    const epubResults = results.filter(r => r.format === 'epub' && r.title);
-
-    let candidates = pdfResults.length > 0 ? pdfResults : epubResults;
-
     // Filter by minimum size (0.3MB)
     const MIN_SIZE_BYTES = 314573; // 0.3 * 1024 * 1024
-    candidates = candidates.filter(r => r.sizeBytes >= MIN_SIZE_BYTES);
+    // Combine all formats and filter by minimum size
+    const allCandidates = results.filter(r => r.title && r.sizeBytes >= MIN_SIZE_BYTES);
+    let candidates = allCandidates;
     if (candidates.length === 0) {
       logger.warn(`No results meet minimum size requirement (0.3MB)`);
       return null;
