@@ -464,17 +464,6 @@ async function main(): Promise<void> {
       break;
     }
 
-    case 'preview': {
-      const previewArgs = parsePreviewArgs(commandArgs);
-      if (!previewArgs.input) {
-        console.error('Error: Input PDF file is required');
-        printCommandHelp('preview');
-        process.exit(1);
-      }
-      await runPreview(previewArgs);
-      break;
-    }
-
     default:
       console.error(`Unknown command: ${command}`);
       printHelp();
