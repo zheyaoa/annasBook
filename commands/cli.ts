@@ -49,15 +49,21 @@ function parseArgs(): ParsedArgs {
     } else if (arg === '--json') {
       globalOptions.json = true;
       i++;
+    } else if (!arg.startsWith('-') && !command) {
+      // Detect subcommand first
+      command = arg;
+      i++;
+    } else if ((arg === '--help' || arg === '-h') && command) {
+      // -h after command: pass to subcommand
+      commandArgs.push(arg);
+      i++;
     } else if (arg === '--help' || arg === '-h') {
+      // -h without command: show main help
       printHelp();
       process.exit(0);
     } else if (arg === '--version' || arg === '-v') {
       console.log(`annas-download v${VERSION}`);
       process.exit(0);
-    } else if (!arg.startsWith('-') && !command) {
-      command = arg;
-      i++;
     } else {
       commandArgs.push(arg);
       i++;
