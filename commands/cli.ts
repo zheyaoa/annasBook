@@ -15,6 +15,7 @@ import { runBatch } from './batch.js';
 import { runConfig } from './config-command.js';
 import { runConvert } from './convert.js';
 import { runPreview } from './preview.js';
+import { runInstall } from './install.js';
 
 const VERSION = '1.0.0';
 
@@ -87,6 +88,7 @@ Commands:
   config     Manage configuration
   convert    Convert EPUB to PDF
   preview    Generate PNG preview of PDF first page
+  install    Install skills to ~/.claude/skills/
 
 Global Options:
   --config <path>   Use specified config file
@@ -102,6 +104,7 @@ Examples:
   annas-download config init
   annas-download convert ./downloads/book.epub
   annas-download preview ./book.pdf
+  annas-download install
 
 Run 'annas-download <command> --help' for command-specific options.
 `);
@@ -212,6 +215,17 @@ Examples:
   annas-download preview ./book.pdf
   annas-download preview --input ./book.pdf --output ./previews
   annas-download preview ./book.pdf --output ./previews/cover.png
+`);
+      break;
+
+    case 'install':
+      console.log(`
+Usage: annas-download install
+
+Installs all skills from assets/skills/ to ~/.claude/skills/.
+
+Example:
+  annas-download install
 `);
       break;
 
@@ -465,6 +479,10 @@ async function main(): Promise<void> {
       await runBatch(batchArgs, config);
       break;
     }
+
+    case 'install':
+      await runInstall();
+      break;
 
     default:
       console.error(`Unknown command: ${command}`);
