@@ -369,6 +369,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Check for help flag before loading config (skip Excel file check)
+  if (commandArgs.includes('-h') || commandArgs.includes('--help')) {
+    printCommandHelp(command);
+    process.exit(0);
+  }
+
   // Load config for other commands
   const config = loadConfig(globalOptions.config, { skipExcelCheck: command === 'batch' });
   validateConfig(config, { skipExcelCheck: command === 'batch' });
