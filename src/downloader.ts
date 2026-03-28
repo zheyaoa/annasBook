@@ -5,6 +5,7 @@ import { HttpClient } from './http-client.js';
 import { logger } from './logger.js';
 import { sleep } from './utils.js';
 import { Converter } from './converter.js';
+import { Previewer } from './previewer.js';
 
 const INVALID_CHARS_REGEX = /[/\\:*?"<>|]/g;
 
@@ -162,6 +163,16 @@ export class Downloader {
         this.consecutiveFailures = 0;
         const actualSize = fs.statSync(finalPath).size;
         logger.info(`Downloaded: ${path.basename(finalPath)} (${actualSize} bytes)`);
+
+        // 下载成功后，如果是 PDF，生成预览
+        if (actualFormat === 'pdf') {
+          const previewer = new Previewer();
+          const previewResult = await previewer.generatePreview({ inputPath: finalPath });
+          if (!previewResult.success) {
+            logger.warn(`Preview generation failed: ${previewResult.error}`);
+          }
+        }
+
         return { success: true, filePath: finalPath, downloadUrl };
 
       } catch (error) {
