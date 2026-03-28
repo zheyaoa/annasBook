@@ -1,0 +1,23 @@
+{
+  "skill_name": "anna-downloader",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "帮我下载《了不起的盖茨比》这本书",
+      "expected_output": "应使用 annas-download download --title \"The Great Gatsby\" --lang en 命令搜索并下载",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Search for a PDF of \"Designing Data-Intensive Applications\"",
+      "expected_output": "应使用 annas-download search --title \"Designing Data-Intensive Applications\" --format pdf 命令搜索",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I have an MD5 hash a1b2c3d4e5f6g7h8, download that book for me",
+      "expected_output": "应使用 annas-download download --md5 a1b2c3d4e5f6g7h8 命令直接下载",
+      "files": []
+    }
+  ]
+}
