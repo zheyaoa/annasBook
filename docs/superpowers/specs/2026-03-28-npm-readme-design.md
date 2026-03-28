@@ -29,7 +29,11 @@ Create an English-language README.md for publishing `@zheyao/annas-book-download
 npm install -g @zheyao/annas-book-downloader
 ```
 
-Then use the `annas-download` CLI command.
+**Install the Claude Code skill (optional but recommended):**
+```bash
+annas-download install
+```
+This installs the `anna-downloader` skill to `~/.claude/skills/`, enabling Claude Code to help with book searches and downloads.
 
 ### 4. Quick Start
 - `annas-download config init` — initialize config
@@ -78,5 +82,37 @@ ISC
 - Code blocks for all commands
 - No project structure or dev docs (not relevant to end users)
 
+## npm Package Structure
+
+The package includes both the CLI tool and a bundled Claude Code skill:
+
+```
+@zheyao/annas-book-downloader/
+├── bin/
+│   └── annas-download.js      # CLI entry point
+├── dist/                      # Compiled JavaScript
+└── assets/
+    └── skills/
+        └── anna-downloader/  # Claude Code skill
+            ├── SKILL.md
+            └── evals/
+                └── evals.json
+```
+
+**package.json files field:**
+```json
+{
+  "files": ["bin", "dist", "assets"]
+}
+```
+
+**Skill Installation:**
+After installing the npm package, run:
+```bash
+annas-download install
+```
+This copies the `anna-downloader` skill to `~/.claude/skills/`.
+
 ## File
-The README.md will replace the existing README.md at project root. Original Chinese README to be archived to `docs/README-zh.md` if user wants to preserve it.
+- README.md (English, replaces existing Chinese README)
+- Original Chinese README archived to `docs/README-zh.md`
