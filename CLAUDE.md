@@ -39,7 +39,19 @@ npx tsx /Users/yuyuxin/code/annasBook/test/test-fast-download.ts
 
 ## Configuration
 
-Create `config.json` in the project root with:
+Configuration file is located at `~/.annasbook/config.json` (user-level, not in project).
+
+**Initialize config:**
+```bash
+npx tsx commands/cli.ts config init    # Creates ~/.annasbook/config.json
+```
+
+**Config file search order:**
+1. `$ANNASBOOK_CONFIG` env var (if set)
+2. `~/.annasbook/config.json` (default)
+3. `./config.json` (backward compat, deprecated)
+
+**Config fields:**
 - `apiKey`: API key for Anna's Archive (required)
 - `baseUrl`: Base URL for Anna's Archive mirror
 - `excelFile`: Path to Excel file with book list (Excel mode only)
