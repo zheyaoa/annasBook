@@ -54,9 +54,15 @@ export async function runBatch(args: BatchArgs, config: Config): Promise<void> {
   let totalFailed = 0;
   let globalDownloadCount = 0;
 
+  // 判断是否用 xlsx 文件名作为目录：只有一个 sheet 且叫 Sheet1 时
+  const useExcelNameAsFolder = sheetNames.length === 1 && sheetNames[0] === 'Sheet1' && args.excel;
+  const excelFolderName = useExcelNameAsFolder ? path.basename(args.excel, '.xlsx') : null;
+
   for (const sheetName of sheetNames) {
     // Create safe folder name for this sheet
-    const safeFolderName = sanitizeFolderName(sheetName);
+    const safeFolderName = useExcelNameAsFolder && excelFolderName
+      ? sanitizeFolderName(excelFolderName)
+      : sanitizeFolderName(sheetName);
     const sheetOutputDir = path.join(config.downloadDir, safeFolderName);
 
     if (!args.json) {
