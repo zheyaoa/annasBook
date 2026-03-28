@@ -9,5 +9,6 @@ cookies.json
 test
 src/assets/
 docs/superpowers/workspace/
+.worktrees/
 skills/*
 .DS_Store
