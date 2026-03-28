@@ -14,6 +14,7 @@ import { runDownload } from './download.js';
 import { runBatch } from './batch.js';
 import { runConfig } from './config-command.js';
 import { runConvert } from './convert.js';
+import { runPreview } from './preview.js';
 
 const VERSION = '1.0.0';
 
@@ -85,6 +86,7 @@ Commands:
   batch      Batch download from Excel file
   config     Manage configuration
   convert    Convert EPUB to PDF
+  preview    Generate PNG preview of PDF first page
 
 Global Options:
   --config <path>   Use specified config file
@@ -99,6 +101,7 @@ Examples:
   annas-download batch --excel ./books.xlsx --limit 10
   annas-download config init
   annas-download convert ./downloads/book.epub
+  annas-download preview ./book.pdf
 
 Run 'annas-download <command> --help' for command-specific options.
 `);
@@ -191,6 +194,24 @@ Examples:
   annas-download convert ./downloads/book.epub
   annas-download convert ./downloads/book.epub --output ./pdfs
   annas-download convert ./downloads/book.epub --output ./pdfs/mybook.pdf
+`);
+      break;
+
+    case 'preview':
+      console.log(`
+Usage: annas-download preview <input.pdf> [options]
+
+Arguments:
+  <input.pdf>           Path to PDF file (required, can also use --input)
+
+Options:
+  --input <path>        Path to PDF file
+  --output <path>       Output path or directory for PNG (default: same dir as input)
+
+Examples:
+  annas-download preview ./book.pdf
+  annas-download preview --input ./book.pdf --output ./previews
+  annas-download preview ./book.pdf --output ./previews/cover.png
 `);
       break;
 
@@ -342,6 +363,28 @@ function parseConvertArgs(args: string[]): { input?: string; output?: string } {
   return result;
 }
 
+function parsePreviewArgs(args: string[]): { input?: string; output?: string } {
+  const result: { input?: string; output?: string } = {};
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--input' && args[i + 1]) {
+      result.input = args[i + 1];
+      i++;
+    } else if (args[i] === '--output' && args[i + 1]) {
+      result.output = args[i + 1];
+      i++;
+    } else if (args[i] === '--help' || args[i] === '-h') {
+      printCommandHelp('preview');
+      process.exit(0);
+    } else if (!args[i].startsWith('-') && !result.input) {
+      // Positional argument
+      result.input = args[i];
+    }
+  }
+
+  return result;
+}
+
 async function main(): Promise<void> {
   const { globalOptions, command, commandArgs } = parseArgs();
 
@@ -366,6 +409,18 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     await runConvert({ input: convertArgs.input, output: convertArgs.output });
+    return;
+  }
+
+  // Handle preview command separately (doesn't need config file)
+  if (command === 'preview') {
+    const previewArgs = parsePreviewArgs(commandArgs);
+    if (!previewArgs.input) {
+      console.error('Error: Input PDF file is required');
+      printCommandHelp('preview');
+      process.exit(1);
+    }
+    await runPreview(previewArgs);
     return;
   }
 
@@ -406,6 +461,17 @@ async function main(): Promise<void> {
       if (globalOptions.json) batchArgs.json = true;
       if (globalOptions.output) batchArgs.output = globalOptions.output;
       await runBatch(batchArgs, config);
+      break;
+    }
+
+    case 'preview': {
+      const previewArgs = parsePreviewArgs(commandArgs);
+      if (!previewArgs.input) {
+        console.error('Error: Input PDF file is required');
+        printCommandHelp('preview');
+        process.exit(1);
+      }
+      await runPreview(previewArgs);
       break;
     }
 
