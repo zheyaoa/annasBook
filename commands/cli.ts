@@ -431,8 +431,9 @@ async function main(): Promise<void> {
   }
 
   // Load config for other commands
-  const config = loadConfig(globalOptions.config, { skipExcelCheck: command === 'batch' });
-  validateConfig(config, { skipExcelCheck: command === 'batch' });
+  const needsExcel = command === 'batch';
+  const config = loadConfig(globalOptions.config, { skipExcelCheck: !needsExcel });
+  validateConfig(config, { skipExcelCheck: !needsExcel });
 
   // Apply global output override
   if (globalOptions.output) {
