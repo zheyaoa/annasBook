@@ -1,5 +1,5 @@
 // src/previewer.ts
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -63,7 +63,7 @@ export class Previewer {
 
       // Run pdftoppm: -png (PNG output), -f 1 -l 1 (first page only)
       // Pass arguments as array to avoid command injection
-      execSync('pdftoppm', ['-png', '-f', '1', '-l', '1', inputPath, outputPrefix], { stdio: 'pipe', timeout: 30000 });
+      execFileSync('pdftoppm', ['-png', '-f', '1', '-l', '1', inputPath, outputPrefix], { stdio: 'pipe', timeout: 30000 });
 
       // pdftoppm creates outputPrefix-1.png (or -01.png with leading zero), rename to our outputPath
       const generatedFile1 = `${outputPrefix}-1.png`;

@@ -420,7 +420,7 @@ async function main(): Promise<void> {
       printCommandHelp('preview');
       process.exit(1);
     }
-    await runPreview(previewArgs);
+    await runPreview(previewArgs as { input: string; output?: string });
     return;
   }
 
