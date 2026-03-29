@@ -19,7 +19,7 @@ CLI tool to search and download books from Anna's Archive mirror sites.
 ## Installation
 
 ```bash
-npm install -g @zheyao/annas-book-downloader
+npm install -g annas-downloader
 ```
 
 **Install the Claude Code skill (optional but recommended):**
