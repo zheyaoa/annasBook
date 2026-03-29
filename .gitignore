@@ -12,10 +12,10 @@ assets/*.xlsx
 assets/NWC虚拟图书馆.xlsx
 assets/已有但未找到-含有冒号.xlsx
 assets/哲学与生命意义-来自图片.xlsx
-docs/superpowers/workspace/
-docs/superpowers/specs/2026-03-25-fix-format-parsing-design.md
-docs/superpowers/specs/2026-03-28-project-structure-design.md
+docs/superpowers/
 .worktrees/
-skills/*
+skills/
+bin/
 .DS_Store
 scripts/
+.claude/settings.local.json

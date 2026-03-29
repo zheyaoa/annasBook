@@ -1,7 +1,7 @@
 // commands/preview.ts
 import fs from 'fs';
 import path from 'path';
-import { Previewer } from '../src/previewer';
+import { Previewer } from '../src/previewer.js';
 
 interface PreviewArgs {
   input: string;

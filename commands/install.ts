@@ -1,8 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { fileURLToPath } from 'url';
 
-const SOURCE_DIR = path.join(process.cwd(), 'assets', 'skills');
+// Get the directory where this script is installed (package root)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// Go up from dist/commands/ to package root
+const PACKAGE_ROOT = path.resolve(__dirname, '../..');
+
+const SOURCE_DIR = path.join(PACKAGE_ROOT, 'assets', 'skills');
 const TARGET_DIR = path.join(os.homedir(), '.claude', 'skills');
 
 export async function runInstall(): Promise<void> {
@@ -55,6 +62,7 @@ export async function runInstall(): Promise<void> {
   }
 
   console.log(`Done. ${installed} skill(s) installed.`);
+  process.exit(0);
 }
 
 async function copyDir(src: string, dest: string): Promise<void> {

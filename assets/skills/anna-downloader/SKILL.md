@@ -8,23 +8,12 @@ description: |
 
 A CLI tool to search and download books from Anna's Archive mirror sites.
 
-## Installation
-
-```bash
-# From project directory
-cd /Users/yuyuxin/code/annasBook
-npm link
-
-# Now available globally as `annas-download`
-```
-
 ## Prerequisites
 
 Before using this tool, you need a config file. The tool searches for config in this order:
 
 1. `ANNASBOOK_CONFIG` environment variable
 2. `~/.annasbook/config.json` (default location)
-3. `./config.json` (current directory)
 
 **Initialize config:**
 ```bash
